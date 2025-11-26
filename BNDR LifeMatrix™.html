@@ -1,0 +1,2443 @@
+<!-- CHANGELOG:        /* Accent Themes (apply to both light and dark base) */
+        .apex-teal-glow { --color-accent: 13 222 195; --color-accent-hover: 50 240 215; }
+        .electric-magenta-glow { --color-accent: 255 0 255; --color-accent-hover: 255 80 255; }
+        .electric-vioblue { --color-accent: 138 43 226; --color-accent-hover: 158 73 246; }
+        .electric-blue-dark { --color-accent: 25 95 255; --color-accent-hover: 45 115 255; }
+ 
+        .pastel-pink { --color-accent: 255 182 193; --color-accent-hover: 255 202 213; }
+        .neon-blue { --color-accent:
+- Task 0: Added full import/export system with auto-apply for all data + settings (auto-backup before import, schema validation, instant theme/clock/API application).
+- Task 1: Fixed clock 1Hz update, added city/timezone picker with drag-reorder/remove.
+- Task 2: Added dark/light toggle (WCAG AA: contrast ≥4.5:1, ARIA, focus, reduced-motion).
+- Task 3: Upgraded fonts to Manrope (body) + Crimson Pro (headings).
+- Task 4: Generalized API support (removed "Gemini" branding, backward-compatible).
+- Task 5: Added user-configurable AI prompts with business-grade defaults.
+- Task 6: Replaced corner toasts with interactive tutorial modal system (now includes import/export guidance).
+-->
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LifeMatrix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/utc.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/timezone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/weekday.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/isoWeek.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- TASK 3: Font Stack Upgrade -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Rubik+Moonrocks&display=swap" rel="stylesheet">
+
+    <script>
+        // Instant Theme Load to prevent flash
+        (function() {
+            const savedTheme = localStorage.getItem('bndr_v2_dataTheme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+        })();
+
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Manrope', 'system-ui', 'sans-serif'],
+                        serif: ['Crimson Pro', 'serif'],
+                    },
+                    colors: {
+                        primary: 'rgb(var(--color-primary) / <alpha-value>)',
+                        secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+                        tertiary: 'rgb(var(--color-tertiary) / <alpha-value>)',
+                        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+                        'accent-hover': 'rgb(var(--color-accent-hover) / <alpha-value>)',
+                        'text-primary': 'rgb(var(--color-text-primary) / <alpha-value>)',
+                        'text-secondary': 'rgb(var(--color-text-secondary) / <alpha-value>)',
+                        'danger': 'rgb(var(--color-danger) / <alpha-value>)',
+                        'warning': 'rgb(var(--color-warning) / <alpha-value>)',
+                        'success': 'rgb(var(--color-success) / <alpha-value>)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* TASK 2: Dark/Light Mode Palettes */
+        :root {
+             /* Default Dark Mode base */
+          --color-primary: 0 0 0; /* #000000 */
+          --color-secondary: 18 18 18; /* #121212 */
+          --color-tertiary: 35 35 35; /* #232323 */
+          --color-text-primary: 234 234 234; /* #EAEAEA */
+          --color-text-secondary: 160 160 160; /* #A0A0A0 */
+          --color-danger: 194 65 12; /* #C2410C */
+          --color-warning: 194 133 12; /* #C2850C */
+          --color-success: 21 128 61; /* #15803D */
+        }
+
+        html[data-theme="light"] {
+            --color-primary: 249 250 251; /* gray-50 */
+            --color-secondary: 255 255 255; /* white */
+            --color-tertiary: 229 231 235; /* gray-200 */
+            --color-text-primary: 17 24 39; /* gray-900 */
+            --color-text-secondary: 75 85 99; /* gray-600 */
+            /* Adjusted semantic colors for light mode contrast */
+             --color-danger: 220 38 38;
+             --color-warning: 202 138 4;
+             --color-success: 22 163 74;
+        }
+
+        /* TASK 3: Typography */
+        html { font-family: 'Nunito', system-ui, sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: 'Nunito', sans-serif; font-weight: 700; }
+        .brand-title { font-family: 'Rubik Moonrocks', cursive; }
+        .welcome-title { font-family: 'Nunito', sans-serif; font-weight: 800; }
+
+        /* Accent Themes (apply to both light and dark base) */
+        .apex-teal-glow { --color-accent: 13 222 195; --color-accent-hover: 50 240 215; }
+        .electric-magenta-glow { --color-accent: 255 0 255; --color-accent-hover: 255 80 255; }
+        .electric-vioblue { --color-accent: 138 43 226; --color-accent-hover: 158 73 246; }
+        .electric-blue-dark { --color-accent: 25 95 255; --color-accent-hover: 45 115 255; }
+
+        .pastel-pink { --color-accent: 255 182 193; --color-accent-hover: 255 202 213; }
+        .neon-blue { --color-accent: 0 191 255; --color-accent-hover: 30 211 255; }
+        .tropical-orange { --color-accent: 255 159 64; --color-accent-hover: 255 180 90; }
+
+        /* Common Utilities */
+        .card-glossy { position: relative; overflow: hidden; transition: transform 0.3s ease, box-shadow 0.3s ease; box-shadow: 0 0 0 1px rgba(var(--color-accent), 0.3); }
+        .card-glossy:hover { transform: translateY(-4px); box-shadow: 0 0 15px rgba(var(--color-accent), 0.4), 0 0 5px rgba(var(--color-accent), 0.6); }
+        .card-glossy::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(var(--color-accent), 0.1) 0%, rgba(255, 255, 255, 0) 50%); transform: translate(-100%, -100%); transition: transform 0.6s ease; pointer-events: none; }
+
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background-color: rgb(var(--color-primary)); transition: background-color 0.3s ease, color 0.3s ease; }
+        
+        .toast { transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease-in-out; transform: translateY(150%); opacity: 0; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        .calendar-day { min-height: 120px; }
+        .task-item, .event-item { cursor: grab; }
+        .task-item:active, .event-item:active { cursor: grabbing; }
+        .drag-over { border: 2px dashed rgb(var(--color-accent)); background-color: rgba(var(--color-accent), 0.05);}
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgb(var(--color-primary)); }
+        ::-webkit-scrollbar-thumb { background: rgb(var(--color-tertiary)); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(var(--color-accent), 0.7); }
+
+        .nav-link.active, .theme-btn.active { background-color: rgb(var(--color-secondary)); color: rgb(var(--color-accent)); }
+        
+        /* Form Element Overrides for Light/Dark compatibility */
+        input[type="time"]::-webkit-calendar-picker-indicator,
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator { 
+            filter: invert(1); 
+        }
+        html[data-theme="light"] input[type="time"]::-webkit-calendar-picker-indicator,
+        html[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator,
+        html[data-theme="light"] input[type="datetime-local"]::-webkit-calendar-picker-indicator { 
+            filter: invert(0); 
+        }
+        
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; }
+        .drag-handle { cursor: grab; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); width: 12px; height: 24px; display: flex; flex-direction: column; justify-content: space-around; align-items: center; }
+        .drag-handle:active { cursor: grabbing; }
+        .drag-handle span { display: block; width: 3px; height: 3px; background-color: rgb(var(--color-text-secondary)); border-radius: 50%; }
+        .sortable-ghost { opacity: 0.4; background: rgb(var(--color-tertiary)); }
+
+        .kanban-column { min-height: 400px; }
+        .kanban-item.sortable-ghost { background: rgb(var(--color-accent)); color: rgb(var(--color-primary)); }
+        
+        .kanban-item-todo {
+            background-color: rgba(var(--color-accent), 0.15);
+            border-left: 3px solid rgb(var(--color-accent));
+        }
+
+        .gemini-button .sparkle-icon { transition: transform 0.3s ease; }
+        .gemini-button:hover .sparkle-icon { transform: scale(1.2) rotate(15deg); }
+        .micro-icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; }
+
+        .prose-custom ul { list-style-type: none; padding-left: 0; }
+        .prose-custom li { position: relative; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .prose-custom li::before { content: '•'; position: absolute; left: 0; color: rgb(var(--color-accent)); }
+
+        /* Accessibility focus styles */
+        button:focus-visible, input:focus-visible, a:focus-visible {
+            outline: 2px solid rgb(var(--color-accent));
+            outline-offset: 2px;
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
+        }
+
+        /* Tutorial highlight ring */
+        .tutorial-highlight {
+            position: relative;
+            box-shadow: 0 0 0 3px rgba(var(--color-accent), 0.9);
+            border-radius: 0.75rem;
+        }
+        @media print {
+            body * { visibility: hidden; }
+            #content, #content * { visibility: visible; }
+            #content { position: absolute; left: 0; top: 0; width: 100%; padding: 20px !important; margin: 0 !important; }
+            .no-print { display: none !important; }
+            body { background-color: white !important; color: black !important; }
+            .print-bg-secondary { background-color: #f3f4f6 !important; }
+            .print-text-primary { color: #111827 !important; }
+            .print-text-secondary { color: #6b7280 !important; }
+            .print-border { border: 1px solid #e5e7eb !important; }
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        /* Force checkboxes to follow the active theme accent */
+        input[type="checkbox"] {
+            accent-color: rgb(var(--color-accent));
+        }
+    </style>
+</head>
+<body class="bg-primary text-text-primary flex flex-col md:flex-row h-screen overflow-hidden">
+    
+    <!-- Sidebar / Navigation -->
+    <nav class="bg-secondary/80 backdrop-blur-md border-r border-tertiary w-full md:w-64 flex-shrink-0 flex flex-col no-print">
+        <div class="flex items-center justify-between p-4 border-b border-tertiary flex-shrink-0">
+            <div class="flex items-center space-x-2">
+    <h1 class="text-xl font-bold brand-title">BNDR LifeMatrix™</h1>
+</div>
+            <button id="mobile-menu-button" class="md:hidden text-text-secondary hover:text-text-primary">
+                 <svg id="mobile-menu-open-icon" class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/></svg>
+                 <svg id="mobile-menu-close-icon" class="w-6 h-6 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+        <div id="nav-content" class="p-4 space-y-2 hidden md:block flex-grow overflow-y-auto">
+            <a href="#home" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span>Home</span>
+            </a>
+            <a href="#dashboard" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="13" rx="1"/><rect width="7" height="5" x="14" y="15" rx="1"/><rect width="7" height="9" x="14" y="4" rx="1"/><rect width="7" height="5" x="3" y="4" rx="1"/></svg>
+                <span>Dashboard</span>
+            </a>
+            <a href="#calendar" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                <span>Calendar</span>
+            </a>
+            <a href="#tasks" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/></svg>
+                <span>Tasks</span>
+            </a>
+            <a href="#clients" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                 <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Clients</span>
+            </a>
+            <a href="#medical" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9.5 12 2 2 4-4"/></svg>
+                <span>Medical</span>
+            </a>
+            <a href="#legal" class="nav-link flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3.5 12h17"/><path d="M12 21a9 9 0 0 1 0-18"/><path d="M20.5 12a8.5 8.5 0 0 0-17 0"/></svg>
+                <span>Legal</span>
+            </a>
+            
+             <!-- TASK 6: Help / Tutorial Trigger -->
+            <button onclick="App.showHelpModal()" class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200 mt-2">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
+                <span>Help & Guide</span>
+            </button>
+
+            <div class="pt-4 mt-4 border-t border-tertiary">
+                <button id="settings-toggle" class="w-full flex justify-between items-center px-3 text-sm font-semibold uppercase text-text-secondary">
+                    <span>Settings</span>
+                    <svg id="settings-chevron" class="w-4 h-4 transition-transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                </button>
+                <div id="settings-content" class="collapsible-content mt-2 space-y-1">
+                     <!-- TASK 4: Generalize API Key Setting -->
+                     <div class="px-3 pb-2 border-b border-tertiary mb-2">
+                        <label class="block text-sm font-semibold uppercase text-text-secondary mb-1">API Key</label>
+                       <div class="relative">
+                            <input type="password" id="api-key-input" placeholder="Enter your AI provider API key" class="w-full bg-primary border border-tertiary rounded p-1.5 text-xs text-text-primary focus:outline-none focus:border-accent" onchange="localStorage.setItem('bndr_v2_apiKey', this.value)">
+                        </div>
+
+                     </div>
+                     
+                     <!-- TASK 5: AI Prompt Config Trigger -->
+                     <div class="px-3 pb-2 border-b border-tertiary mb-2">
+                         <button onclick="App.showAIPromptConfig()" class="w-full text-left text-sm font-semibold uppercase text-text-secondary hover:text-accent transition-colors">
+                             Configure AI Prompts
+                         </button>
+                     </div>
+
+                     <!-- TASK 2: Theme settings (Light/Dark + Accents) -->
+                     <div class="px-3 pb-2 border-b border-tertiary mb-2">
+                        <label class="block text-sm font-semibold uppercase text-text-secondary mb-2">Appearance</label>
+                        <button onclick="App.toggleLightDarkMode()" id="theme-mode-toggle" class="w-full flex items-center justify-center space-x-2 p-2 bg-primary border border-tertiary rounded-md mb-2 text-text-secondary hover:text-text-primary transition-colors" aria-label="Toggle dark and light mode">
+                             <span id="mode-icon"></span>
+                             <span id="mode-label" class="text-xs font-bold">Switch Mode</span>
+                        </button>
+                        <div id="theme-settings-container"></div>
+                     </div>
+                     
+                     <!-- TASK 1: Clock Configuration -->
+                     <div class="px-3 pb-2 border-b border-tertiary mb-2 mt-2">
+                        <div class="flex justify-between items-center mb-2">
+                             <label class="block text-sm font-semibold uppercase text-text-secondary">World Clocks</label>
+                             <button onclick="App.showClockConfigModal()" class="text-xs text-accent hover:underline">Edit</button>
+                        </div>
+                        <div id="clock-config-list" class="space-y-1 text-xs text-text-secondary"></div>
+                     </div>
+
+                     <!-- Notification settings -->
+                     <button onclick="NotificationManager.requestPermission()" id="notification-toggle-btn" class="w-full flex items-center justify-between space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                        <span class="flex items-center space-x-3">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0v5a6 6 0 0 0 6 6H0a6 6 0 0 0 6-6z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg>
+                            <span>Browser Alerts</span>
+                        </span>
+                        <span id="notification-status" class="text-xs uppercase"></span>
+                    </button>
+                     <!-- Sound settings -->
+                    <button onclick="App.toggleSounds()" id="sound-toggle-btn" class="w-full flex items-center justify-between space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                        <span class="flex items-center space-x-3">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                            <span>UI Sounds</span>
+                        </span>
+                        <span id="sound-status" class="text-xs uppercase">Off</span>
+                    </button>
+                    <!-- Data Management -->
+                    <div class="pt-2 mt-2 border-t border-tertiary/50">
+                        <p class="px-3 text-sm font-semibold uppercase text-text-secondary mb-1">Data Management</p>
+                        <!-- TASK 0: Enhanced Import/Export -->
+                        <button onclick="DataManager.exportData()" class="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            <span>Backup Data (JSON)</span>
+                        </button>
+                         <button onclick="document.getElementById('import-file').click()" class="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                             <span>Import Backup (JSON)</span>
+                        </button>
+                         <input type="file" id="import-file" class="hidden" accept=".json" onchange="App.importBackup(event)">
+
+                        <button onclick="DataManager.exportPDF()" class="w-full text-left flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200">
+                             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                            <span>Print Report (PDF)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+             <div id="undo-redo-container" class="pt-4 mt-auto space-x-2 flex justify-center border-t border-tertiary"></div>
+        </div>
+    </nav>
+    
+    <main class="flex-1 bg-primary overflow-y-auto relative">
+        <div id="mobile-header-container"></div>
+        <div id="content" class="p-4 sm:p-6 lg:p-8"></div>
+        <div class="px-4 py-2 text-[10px] text-text-secondary text-center border-t border-tertiary no-print">
+            BNDR LifeMatrix™ · BNDR LLC · All rights reserved. Unauthorized copying or distribution prohibited.
+        </div>
+    </main>
+
+    <div id="toast" class="toast fixed bottom-5 right-5 bg-secondary border border-accent/50 text-text-primary p-4 rounded-lg shadow-2xl flex items-center space-x-3 z-50">
+        <svg id="toast-icon" class="w-6 h-6 text-accent" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span id="toast-message"></span>
+    </div>
+
+    <div id="modal-container" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-40 p-4 overflow-y-auto">
+        <!-- Modal content will be injected here -->
+    </div>
+
+   <script>
+        window.gsap = window.gsap || {
+            to: () => {},
+            fromTo: () => {}
+        };
+
+        dayjs.extend(window.dayjs_plugin_utc);
+        dayjs.extend(window.dayjs_plugin_timezone);
+        dayjs.extend(window.dayjs_plugin_weekday);
+        dayjs.extend(window.dayjs_plugin_isoWeek);
+        dayjs.tz.setDefault(dayjs.tz.guess());
+        
+        // --- GEMINI API MODULE ---
+        const GeminiAPI = {
+            async generateText(prompt, promptType) {
+                const apiKey = localStorage.getItem('bndr_v2_apiKey') || "";
+                if (!apiKey || apiKey.trim() === "") {
+                     // TASK 4: Gentle prompt instead of error
+                    UIManager.showToast("Add API Key in Settings to use AI features.", 'warning');
+                    return null;
+                }
+
+                // TASK 5: Apply custom prompts if available
+                let finalPrompt = prompt;
+                const customPrompts = StateManager.state.config.aiPrompts || {};
+                
+                if (promptType && customPrompts[promptType]) {
+                    finalPrompt = `${customPrompts[promptType]}\n\nContext Data:\n${prompt}`;
+                }
+
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                const payload = { contents: [{ parts: [{ text: finalPrompt }] }] };
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else {
+                        throw new Error('Invalid response structure from Gemini API.');
+                    }
+                } catch (error) {
+                    console.error('Gemini API Error:', error);
+                    UIManager.showToast('AI request failed. Check API Key.', 'error');
+                    return null;
+                }
+            }
+        };
+
+        // --- AUDIO MANAGER ---
+        const AudioManager = {
+            context: null,
+            buffers: {},
+            init() {
+                if (this.context) return;
+                try {
+                    this.context = new (window.AudioContext || window.webkitAudioContext)();
+                    this.loadSounds();
+                } catch (e) {
+                    console.error("Web Audio API is not supported in this browser.");
+                }
+            },
+            base64ToArrayBuffer(base64) {
+                try {
+                    const binaryString = window.atob(base64);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) { bytes[i] = binaryString.charCodeAt(i); }
+                    return bytes.buffer;
+                } catch(e) {
+                    console.error("Invalid base64 audio data.");
+                    return new ArrayBuffer(0);
+                }
+            },
+            async loadSound(name, base64) {
+                if (!this.context) return;
+                try {
+                    const arrayBuffer = this.base64ToArrayBuffer(base64);
+                    if (arrayBuffer.byteLength > 0) {
+                        this.buffers[name] = await this.context.decodeAudioData(arrayBuffer);
+                    }
+                } catch (e) {
+                    console.error(`Failed to load sound: ${name}`, e);
+                }
+            },
+            loadSounds() {
+                this.loadSound('notification', 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAAD/AA==');
+            },
+            play(name) {
+                if (!this.context || !this.buffers[name]) return;
+                if (this.context.state === 'suspended') this.context.resume();
+                const source = this.context.createBufferSource();
+                source.buffer = this.buffers[name];
+                source.connect(this.context.destination);
+                source.start(0);
+            }
+        };
+
+        // --- DATA MANAGER MODULE ---
+        const DataManager = {
+            prefix: 'bndr_v2_',
+            loadState() {
+                const state = {};
+                try {
+                    state.tasks = JSON.parse(localStorage.getItem(this.prefix + 'tasks') || '[]');
+                    state.clients = JSON.parse(localStorage.getItem(this.prefix + 'clients') || '[]');
+                    state.medical = JSON.parse(localStorage.getItem(this.prefix + 'medical') || '[]');
+                    state.legal = JSON.parse(localStorage.getItem(this.prefix + 'legal') || '[]');
+                    state.filters = JSON.parse(localStorage.getItem(this.prefix + 'filters') || '{}');
+                    state.config = JSON.parse(localStorage.getItem(this.prefix + 'config') || '{}');
+                    
+                    if (!state.config.clocks) {
+                         state.config.clocks = [
+                            { id: 'la', name: 'Los Angeles', tz: 'America/Los_Angeles', enabled: true },
+                            { id: 'chi', name: 'Midwest', tz: 'America/Chicago', enabled: true },
+                            { id: 'ny', name: 'New York', tz: 'America/New_York', enabled: true },
+                            { id: 'kyiv', name: 'Kyiv', tz: 'Europe/Kiev', enabled: true }
+                        ];
+                    }
+                    if (state.config.tutorialSeen === undefined) state.config.tutorialSeen = false;
+                    // TASK 5: Init prompts
+                    if (!state.config.aiPrompts) {
+                        state.config.aiPrompts = {
+                            taskBreakdown: "Parse today's events and context. Derive its functional significance, highlight core decisions made or available, and isolate what truly matters. The output must be concise, insight-dense, and framed for intelligent execution—not reflection. No filler. No pleasantries. No summarizing tasks—extract their meaning. Speak face-to-face, not like a bot. Reject AI-phrasing, cadence, rhythm, and tone.",
+                            dailyBriefing: "You are not a 'task assistant.' You're a strategist. Take the provided task and break it down into 3–5 essential, actionable subtasks. Each one must be outcome-oriented, execution-ready, and stripped of fluff. Format as a numbered list. No filler. No motivational framing. No AI phrasing. Just raw clarity.",
+                            communication: "Draft a message to the client. Make it brief, clear, and human-warm. Keep it professional. No emojis. No AI phrasing. No rhythm loops. Vary cadence like an actual person writing to another person. Write it like it came from someone who handles real clients daily."
+                        };
+                    }
+
+                    state.tasks.forEach(t => {
+                        if (!t.status) t.status = t.completed ? 'done' : 'todo';
+                        if (!t.subtasks) t.subtasks = [];
+                    });
+                } catch (e) {
+                    console.error("Error loading state from localStorage:", e);
+                    return { tasks: [], clients: [], medical: [], legal: [], filters: {}, config: { clocks: [], tutorialSeen: false, aiPrompts: {} } };
+                }
+                return state;
+            },
+            saveState(state) {
+                try {
+                    localStorage.setItem(this.prefix + 'tasks', JSON.stringify(state.tasks));
+                    localStorage.setItem(this.prefix + 'clients', JSON.stringify(state.clients));
+                    localStorage.setItem(this.prefix + 'medical', JSON.stringify(state.medical));
+                    localStorage.setItem(this.prefix + 'legal', JSON.stringify(state.legal));
+                    localStorage.setItem(this.prefix + 'config', JSON.stringify(state.config));
+                } catch (e) {
+                    console.error("Error saving state to localStorage:", e);
+                    UIManager.showToast("Could not save data. Storage may be full.", 'error');
+                }
+            },
+            // TASK 0: Full Export
+            exportData() {
+                App.playSound('notification');
+                const state = StateManager.state;
+                const exportData = {
+                    version: "3.5",
+                    exportDate: new Date().toISOString(),
+                    data: {
+                        tasks: state.tasks,
+                        clients: state.clients,
+                        medical: state.medical,
+                        legal: state.legal
+                    },
+                    config: {
+                        clocks: state.config.clocks,
+                        aiPrompts: state.config.aiPrompts,
+                        tutorialSeen: state.config.tutorialSeen,
+                        theme: localStorage.getItem('bndr_v2_theme'),
+                        dataTheme: localStorage.getItem('bndr_v2_dataTheme'),
+                        apiKey: localStorage.getItem('bndr_v2_apiKey'), // Include key for user convenience
+                    }
+                };
+                
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `BNDR_LifeMatrix_Backup_${dayjs().format('YYYY-MM-DD_HHmmss')}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                UIManager.showToast('Full backup exported successfully!');
+            },
+            exportPDF() {
+                App.playSound('notification');
+                const state = StateManager.state;
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) {
+                    UIManager.showToast('Pop-up blocked. Please allow pop-ups.', 'error');
+                    return;
+                }
+
+                const html = `
+                    <html>
+                    <head>
+                        <title>BNDR LifeMatrix Report - ${dayjs().format('YYYY-MM-DD')}</title>
+                        <style>
+                            body { font-family: 'Times New Roman', serif; line-height: 1.5; color: #000; padding: 40px; }
+                            h1 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                            h2 { margin-top: 30px; background: #f0f0f0; padding: 5px; border-left: 5px solid #333; }
+                            .section { margin-bottom: 20px; }
+                            .item { border-bottom: 1px solid #ccc; padding: 10px 0; page-break-inside: avoid; }
+                            .meta { font-size: 0.9em; color: #555; }
+                            @media print { button { display: none; } }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Confidential Data Report</h1>
+                        <p><strong>Generated:</strong> ${dayjs().format('MMMM D, YYYY h:mm A')}</p>
+                        
+                        <h2>Tasks</h2>
+                        ${state.tasks.length ? state.tasks.map(t => `
+                            <div class="item">
+                                <strong>${t.title}</strong> [${t.status.toUpperCase()}]
+                                <div class="meta">${t.date ? 'Due: ' + t.date : 'No date'}</div>
+                                ${t.details ? `<p>${t.details.replace(/\n/g, '<br>')}</p>` : ''}
+                            </div>
+                        `).join('') : '<p>No tasks recorded.</p>'}
+
+                        <h2>Clients</h2>
+                        ${state.clients.length ? state.clients.map(c => `
+                            <div class="item">
+                                <strong>${c.name}</strong>
+                                <div class="meta">${c.email || 'No Email'} | ${c.phone || 'No Phone'}</div>
+                                ${c.notes ? `<p>Notes: ${c.notes}</p>` : ''}
+                            </div>
+                        `).join('') : '<p>No clients recorded.</p>'}
+
+                         <h2>Medical Appointments</h2>
+                        ${state.medical.length ? state.medical.map(m => `
+                            <div class="item">
+                                <strong>${m.doctor}</strong> (${m.location || 'N/A'})
+                                <div class="meta">${dayjs(m.date).format('MMM D, YYYY h:mm A')}</div>
+                            </div>
+                        `).join('') : '<p>No medical records.</p>'}
+
+                         <h2>Legal Cases</h2>
+                        ${state.legal.length ? state.legal.map(l => `
+                            <div class="item">
+                                <strong>${l.caseName}</strong>
+                                ${l.caseInfo ? `<p>${l.caseInfo}</p>` : ''}
+                            </div>
+                        `).join('') : '<p>No legal cases.</p>'}
+                        
+                        <script>
+                            window.onload = function() { window.print(); }
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+                
+                printWindow.document.write(html);
+                printWindow.document.close();
+            }
+        };
+
+        // --- STATE MANAGER ---
+        const StateManager = {
+            state: {},
+            undoStack: [],
+            redoStack: [],
+            maxHistory: 50,
+            init() {
+                this.state = DataManager.loadState();
+                this.undoStack = [];
+                this.redoStack = [];
+                this.updateUndoRedoUI();
+            },
+            commit(mutationFn, isIrreversible = false) {
+                if (!isIrreversible) {
+                    this.undoStack.push(JSON.parse(JSON.stringify(this.state)));
+                    if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
+                }
+                this.redoStack = [];
+                mutationFn(this.state);
+                DataManager.saveState(this.state);
+                if (mutationFn.toString().includes('clients') || mutationFn.toString().includes('medical')) App.generateReminders();
+                this.updateUndoRedoUI();
+                App.router();
+            },
+            undo() {
+                if (this.undoStack.length > 0) {
+                    this.redoStack.push(JSON.parse(JSON.stringify(this.state)));
+                    this.state = this.undoStack.pop();
+                    DataManager.saveState(this.state);
+                    App.generateReminders();
+                    this.updateUndoRedoUI();
+                    App.router();
+                    UIManager.showToast('Undo successful.');
+                    App.playSound('notification');
+                }
+            },
+            redo() {
+                if (this.redoStack.length > 0) {
+                    this.undoStack.push(JSON.parse(JSON.stringify(this.state)));
+                    this.state = this.redoStack.pop();
+                    DataManager.saveState(this.state);
+                    App.generateReminders();
+                    this.updateUndoRedoUI();
+                    App.router();
+                    UIManager.showToast('Redo successful.');
+                    App.playSound('notification');
+                }
+            },
+            updateUndoRedoUI() {
+                const container = document.getElementById('undo-redo-container');
+                if (!container) return;
+                const canUndo = this.undoStack.length > 0;
+                const canRedo = this.redoStack.length > 0;
+                container.innerHTML = `
+                    <button onclick="StateManager.undo()" class="p-2 rounded-full hover:bg-tertiary transition-colors ${!canUndo ? 'opacity-50 cursor-not-allowed' : ''}" ${!canUndo ? 'disabled' : ''} title="Undo">
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 9"/></svg>
+                    </button>
+                    <button onclick="StateManager.redo()" class="p-2 rounded-full hover:bg-tertiary transition-colors ${!canRedo ? 'opacity-50 cursor-not-allowed' : ''}" ${!canRedo ? 'disabled' : ''} title="Redo">
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3v6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7L21 15"/></svg>
+                    </button>
+                `;
+            }
+        };
+
+        // --- NOTIFICATION MANAGER ---
+        const NotificationManager = {
+            permission: "default",
+            init() {
+                if ('Notification' in window) this.permission = Notification.permission;
+                this.updateStatusUI();
+            },
+            updateStatusUI() {
+                const statusEl = document.getElementById('notification-status');
+                if(statusEl) statusEl.textContent = this.permission;
+            },
+            requestPermission() {
+                if (!('Notification' in window)) {
+                    UIManager.showToast("Browser notifications not supported.", 'error');
+                    return;
+                }
+                if (this.permission === 'denied') {
+                    UIManager.showToast("Notifications blocked. Please enable them in your browser settings.", 'warning');
+                    return;
+                }
+                Notification.requestPermission().then(permission => {
+                    this.permission = permission;
+                    this.updateStatusUI();
+                    if(permission === 'granted') UIManager.showToast('Notifications enabled!');
+                });
+            },
+            show(title, options) {
+                if (this.permission === 'granted') new Notification(title, options);
+            }
+        };
+
+        // --- TASK 6: TUTORIAL SYSTEM REPLACEMENT (SIMPLE POPUP VERSION) ---
+        const TutorialManager = {
+            steps: [
+                {
+                    title: "Welcome to LifeMatrix",
+                    message: "Use the left sidebar to move between Dashboard, Tasks, Calendar, Clients, Medical, and Legal."
+                },
+                {
+                    title: "Dashboard",
+                    message: "Dashboard shows your high-level time, tasks, and widgets. Check it first every day."
+                },
+                {
+                    title: "Tasks",
+                    message: "Add, edit, and complete tasks here. Drag to reorder. Use filters to view what matters now."
+                },
+                {
+                    title: "Calendar",
+                    message: "See scheduled tasks and events. Click a task to adjust date, status, or details."
+                },
+                {
+                    title: "Clients / Medical / Legal",
+                    message: "Use these sections to keep structured records for people, appointments, and cases."
+                },
+                {
+                    title: "Settings & Backup",
+                    message: "Change theme, clocks, branding, sounds, and manage backups via Export / Import."
+                },
+                {
+                    title: "Questions, Comments, Feedback",
+                    message: "Questions, comments, or feedback? Reach out anytime at bndrbots@gmail.com. Cheers and enjoy."
+                }
+            ],
+            currentStep: 0,
+            init() {
+                if (StateManager.state.config && !StateManager.state.config.tutorialSeen) {
+                    this.start();
+                }
+            },
+            start() {
+                this.currentStep = 0;
+                this.showStep(0);
+
+                const settingsContent = document.getElementById('settings-content');
+                if (settingsContent) {
+                    settingsContent.style.maxHeight = settingsContent.scrollHeight + 100 + "px";
+                    const chevron = document.getElementById('settings-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                }
+            },
+            showStep(index) {
+                if (index >= this.steps.length) {
+                    this.finish();
+                    return;
+                }
+
+                this.currentStep = index;
+                const step = this.steps[index];
+
+                const modalHTML = `
+                    <div class="p-6 max-w-md mx-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-accent">${step.title}</h3>
+                            <span class="text-xs text-text-secondary uppercase tracking-wider">
+                                Step ${index + 1}/${this.steps.length}
+                            </span>
+                        </div>
+                        <p class="text-text-primary mb-6">${step.message}</p>
+                        <div class="flex justify-between items-center pt-4 border-t border-tertiary">
+                            <button onclick="TutorialManager.finish()"
+                                    class="text-xs text-text-secondary hover:text-text-primary">
+                                Skip Tutorial
+                            </button>
+                            <div class="flex space-x-3">
+                                ${index > 0 ? `
+                                    <button onclick="TutorialManager.showStep(${index - 1})"
+                                            class="px-3 py-1 text-xs rounded-md border border-tertiary text-text-secondary hover:bg-tertiary/60">
+                                        Back
+                                    </button>
+                                ` : ''}
+                                <button onclick="TutorialManager.showStep(${index + 1})"
+                                        class="px-4 py-1.5 text-xs bg-accent text-primary font-bold rounded-md hover:bg-accent-hover">
+                                    ${index === this.steps.length - 1 ? 'Finish' : 'Next'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                UIManager.showModal(modalHTML);
+            },
+            finish() {
+                StateManager.commit(state => state.config.tutorialSeen = true);
+                UIManager.hideModal();
+
+                const settingsContent = document.getElementById('settings-content');
+                if (settingsContent) {
+                    settingsContent.style.maxHeight = null;
+                    const chevron = document.getElementById('settings-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                }
+            }
+        };
+
+        const App = {
+            state: {
+                currentDate: dayjs(),
+                reminders: [],
+                timer: { interval: null, timeLeft: 25 * 60, isRunning: false },
+                clockInterval: null,
+                soundsEnabled: false,
+            },
+
+            init() {
+                StateManager.init();
+                NotificationManager.init();
+                
+                // Load saved theme accent
+                this.setTheme(localStorage.getItem(DataManager.prefix + 'theme') || 'apex-teal-glow');
+                // TASK 2: Load saved light/dark mode logic handled in head script, but update UI here
+                this.updateThemeModeUI();
+                
+                this.setSounds(JSON.parse(localStorage.getItem(DataManager.prefix + 'soundsEnabled') || 'false'));
+                
+                const apiKeyInput = document.getElementById('api-key-input');
+                if(apiKeyInput) apiKeyInput.value = localStorage.getItem('bndr_v2_apiKey') || '';
+
+                this.generateReminders();
+                this.router();
+                this.attachEventListeners();
+                this.checkReminders();
+                this.renderClockList(); // TASK 1
+                setInterval(this.checkReminders.bind(this), 60000);
+                
+                // TASK 6: Init Tutorial
+                setTimeout(() => TutorialManager.init(), 1000);
+            },
+            
+            generateReminders() {
+                const clientReminders = (StateManager.state.clients || []).flatMap(c => 
+                    (c.appointments || []).map(a => ({...a, type: 'Client', title: `Appt. with ${c.name}`, parentId: c.id}))
+                );
+                const medicalReminders = (StateManager.state.medical || []).map(m => 
+                    ({ date: m.date, title: `Appt. with ${m.doctor}`, type: 'Medical', parentId: m.id})
+                );
+                this.state.reminders = [...clientReminders, ...medicalReminders];
+            },
+
+            setTheme(theme) {
+                // Maintain base 'dark' class for backward compat css, but use data-theme for switching
+                document.documentElement.classList.remove('apex-teal-glow', 'electric-magenta-glow', 'electric-vioblue', 'electric-blue-dark', 'pastel-pink', 'neon-blue', 'tropical-orange');
+                document.documentElement.classList.add(theme);
+                localStorage.setItem(DataManager.prefix + 'theme', theme);
+                UIManager.renderThemeSettings();
+            },
+
+            // TASK 2: Light/Dark Toggle
+            toggleLightDarkMode() {
+                const current = document.documentElement.getAttribute('data-theme') || 'dark';
+                const next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                document.documentElement.classList.toggle('dark', next === 'dark'); // Sync legacy class
+                localStorage.setItem(DataManager.prefix + 'dataTheme', next);
+                this.updateThemeModeUI();
+            },
+
+            updateThemeModeUI() {
+                const mode = document.documentElement.getAttribute('data-theme');
+                const label = document.getElementById('mode-label');
+                const icon = document.getElementById('mode-icon');
+                if (mode === 'dark') {
+                    label.textContent = 'Switch to Light Mode';
+                    icon.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>';
+                } else {
+                    label.textContent = 'Switch to Dark Mode';
+                    icon.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>';
+                }
+            },
+
+            setSounds(enabled) {
+                this.state.soundsEnabled = enabled;
+                localStorage.setItem(DataManager.prefix + 'soundsEnabled', JSON.stringify(enabled));
+                document.getElementById('sound-status').textContent = enabled ? 'On' : 'Off';
+                document.getElementById('sound-toggle-btn').classList.toggle('active', enabled);
+            },
+
+            toggleSounds() {
+                this.setSounds(!this.state.soundsEnabled);
+                this.playSound('notification');
+            },
+            
+            playSound(soundId) {
+                if (this.state.soundsEnabled) AudioManager.play(soundId);
+            },
+
+            router() {
+                clearInterval(this.state.clockInterval);
+                const path = window.location.hash || '#home';
+                this.renderMobileHeader();
+                const content = document.getElementById('content');
+                
+                gsap.to(content, { opacity: 0, duration: 0.2, onComplete: () => {
+                    const { searchTerm = '', sortBy = 'default' } = StateManager.state.filters[path] || {};
+                    switch (path) {
+                        case '#dashboard': this.renderDashboard(); break;
+                        case '#calendar': this.renderCalendar(); break;
+                        case '#tasks': this.renderTasks(searchTerm, sortBy); break;
+                        case '#clients': this.renderClients(searchTerm, sortBy); break;
+                        case '#medical': this.renderMedical(searchTerm, sortBy); break;
+                        case '#legal': this.renderLegal(searchTerm, sortBy); break;
+                        default: this.renderHome();
+                    }
+                    this.updateActiveNavLink(path);
+                    gsap.fromTo(content, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, onComplete: this.applyGlossyEffect });
+                }});
+            },
+            
+            updateFilter(path, key, value) {
+                if (!StateManager.state.filters[path]) StateManager.state.filters[path] = {};
+                StateManager.state.filters[path][key] = value;
+                localStorage.setItem(DataManager.prefix + 'filters', JSON.stringify(StateManager.state.filters));
+                this.router();
+            },
+
+            renderMobileHeader() {
+                const path = window.location.hash || '#home';
+                const headerContainer = document.getElementById('mobile-header-container');
+                if (!headerContainer) return; 
+
+                if (path === '#home' || window.innerWidth >= 768) {
+                    headerContainer.innerHTML = '';
+                    return;
+                }
+                const pageTitle = path.substring(1).charAt(0).toUpperCase() + path.substring(2);
+                headerContainer.innerHTML = `
+                    <div class="md:hidden sticky top-0 z-30 bg-secondary/80 backdrop-blur-md p-4 flex items-center border-b border-tertiary no-print">
+                        <a href="#home" class="p-2 rounded-full hover:bg-tertiary">
+                           <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                        </a>
+                        <h2 class="text-xl font-bold text-center flex-grow">${pageTitle}</h2>
+                        <div class="w-10"></div>
+                    </div>
+                `;
+                const content = document.querySelector('#content');
+                if(content) content.style.paddingTop = '0';
+            },
+            
+            updateActiveNavLink(path) {
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.toggle('active', link.getAttribute('href') === path);
+                });
+            },
+
+            attachEventListeners() {
+                window.addEventListener('hashchange', this.router.bind(this));
+                window.addEventListener('resize', this.renderMobileHeader.bind(this));
+                document.getElementById('mobile-menu-button').addEventListener('click', this.toggleMobileMenu.bind(this));
+                document.getElementById('settings-toggle').addEventListener('click', this.toggleSettingsMenu.bind(this));
+                 document.querySelectorAll('#nav-content .nav-link').forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (window.innerWidth < 768) this.toggleMobileMenu();
+                    });
+                });
+                document.body.addEventListener('click', () => AudioManager.init(), { once: true });
+            },
+
+            toggleSettingsMenu() {
+                const content = document.getElementById('settings-content');
+                const chevron = document.getElementById('settings-chevron');
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                    chevron.style.transform = 'rotate(0deg)';
+                } else {
+                    content.style.maxHeight = content.scrollHeight + 150 + "px"; // Increased buffer
+                    chevron.style.transform = 'rotate(180deg)';
+                }
+            },
+            
+            toggleMobileMenu() {
+                document.getElementById('nav-content').classList.toggle('hidden');
+                document.getElementById('mobile-menu-open-icon').classList.toggle('hidden');
+                document.getElementById('mobile-menu-close-icon').classList.toggle('hidden');
+            },
+
+            applyGlossyEffect() {
+                document.querySelectorAll('.card-glossy').forEach(card => {
+                    card.addEventListener('mousemove', e => {
+                        const rect = card.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        gsap.to(card.querySelector('::before'), { 
+                            x: `${(x / rect.width) * 200 - 50}%`, 
+                            y: `${(y / rect.height) * 200 - 50}%`,
+                            duration: 0.6,
+                            ease: 'power2.out'
+                        });
+                    });
+                    card.addEventListener('mouseleave', () => {
+                         gsap.to(card.querySelector('::before'), { x: '-100%', y: '-100%', duration: 0.6, ease: 'power2.out' });
+                    });
+                });
+            },
+            
+            checkReminders() {
+                const now = dayjs();
+                this.state.reminders.forEach(r => {
+                    const reminderTime = dayjs(r.date);
+                    if (reminderTime.isSame(now, 'minute')) {
+                        const message = `Reminder: ${r.title}`;
+                        UIManager.showToast(message);
+                        this.playSound('notification');
+                        NotificationManager.show(message, { body: `Scheduled for ${reminderTime.format('h:mm A')}`});
+                    }
+                });
+            },
+
+            // TASK 1: Enhanced Clock Logic
+            renderClockList() {
+                const container = document.getElementById('clock-config-list');
+                if (!container) return;
+                const clocks = StateManager.state.config.clocks || [];
+                container.innerHTML = clocks.map((clock, index) => `
+                    <div class="flex items-center justify-between bg-primary/50 p-2 rounded border border-tertiary group" data-id="${index}">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-4 h-4 text-text-secondary cursor-move drag-handle-clock" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            <span class="text-text-secondary ${!clock.enabled ? 'line-through opacity-50' : ''}">${clock.name}</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="App.toggleClock(${index})" class="w-8 h-4 rounded-full transition-colors relative ${clock.enabled ? 'bg-accent' : 'bg-tertiary'}">
+                                <span class="absolute top-0.5 left-0.5 w-3 h-3 bg-primary rounded-full transition-transform ${clock.enabled ? 'translate-x-4' : ''}"></span>
+                            </button>
+                            <button onclick="App.removeClock(${index})" class="text-text-secondary hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                new Sortable(container, {
+                    handle: '.drag-handle-clock',
+                    animation: 150,
+                    onEnd: (evt) => {
+                        const items = Array.from(container.children);
+                        const newOrder = items.map(item => StateManager.state.config.clocks[parseInt(item.dataset.id)]);
+                        // Re-index based on original state to avoid data loss, then commit
+                        const reordered = items.map(item => {
+                           const oldIndex = parseInt(item.dataset.id);
+                           return StateManager.state.config.clocks[oldIndex];
+                        });
+                         StateManager.commit(state => {
+                            state.config.clocks = reordered;
+                         });
+                         this.renderClockList();
+                         this.router(); // Refresh home
+                    }
+                });
+            },
+
+            toggleClock(index) {
+                StateManager.commit(state => {
+                    if(state.config.clocks[index]) state.config.clocks[index].enabled = !state.config.clocks[index].enabled;
+                });
+                this.renderClockList();
+                this.startClocks(); // Re-eval active clocks
+            },
+
+            removeClock(index) {
+                 StateManager.commit(state => {
+                    state.config.clocks.splice(index, 1);
+                });
+                this.renderClockList();
+                this.router();
+            },
+
+            showClockConfigModal() {
+                const timezones = Intl.supportedValuesOf('timeZone');
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-4">Add World Clock</h2>
+                        <form onsubmit="App.addClock(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">City Name</label>
+                                <input type="text" id="clock-name" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required placeholder="e.g. Tokyo">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Timezone</label>
+                                <select id="clock-tz" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                    ${timezones.map(tz => `<option value="${tz}">${tz}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Clock</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+                UIManager.showModal(modalHTML);
+            },
+
+            addClock(event) {
+                event.preventDefault();
+                const name = document.getElementById('clock-name').value;
+                const tz = document.getElementById('clock-tz').value;
+                StateManager.commit(state => {
+                    state.config.clocks.push({ id: Date.now().toString(), name, tz, enabled: true });
+                });
+                UIManager.hideModal();
+                this.renderClockList();
+                this.router();
+            },
+
+            // TASK 0: Import Backup Handler
+            importBackup(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        // Schema Validation
+                        if (!imported.data || !imported.config) throw new Error("Invalid backup file structure.");
+
+                        UIManager.showConfirmationModal(
+                            `Import backup from ${dayjs(imported.exportDate).format('MMM D, YYYY')}? Current data will be auto-backed up first.`,
+                            () => {
+                                // 1. Auto-backup current state
+                                DataManager.exportData(); 
+                                
+                                // 2. Apply State
+                                StateManager.commit((state) => {
+                                    state.tasks = imported.data.tasks || [];
+                                    state.clients = imported.data.clients || [];
+                                    state.medical = imported.data.medical || [];
+                                    state.legal = imported.data.legal || [];
+                                    
+                                    // Config Merge
+                                    state.config.clocks = imported.config.clocks || state.config.clocks;
+                                    state.config.aiPrompts = imported.config.aiPrompts || state.config.aiPrompts;
+                                    state.config.tutorialSeen = imported.config.tutorialSeen || true;
+                                }, true);
+
+                                // 3. Apply Configs immediately
+                                if (imported.config.theme) App.setTheme(imported.config.theme);
+                                if (imported.config.dataTheme) {
+                                     document.documentElement.setAttribute('data-theme', imported.config.dataTheme);
+                                     localStorage.setItem('bndr_v2_dataTheme', imported.config.dataTheme);
+                                     App.updateThemeModeUI();
+                                }
+                                if (imported.config.apiKey) localStorage.setItem('bndr_v2_apiKey', imported.config.apiKey);
+
+                                UIManager.showToast('Import successful! Page refreshing...');
+                                setTimeout(() => window.location.reload(), 1500); // Hard reload to ensure clean state
+                            }
+                        );
+                    } catch (err) {
+                        UIManager.showToast('Import failed: ' + err.message, 'error');
+                        console.error(err);
+                    } finally {
+                        event.target.value = null;
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+        
+        // --- UI MANAGER MODULE ---
+        const UIManager = {
+            renderPageHeader(title, path, options = {}) {
+                const { searchTerm = '', sortBy = 'default' } = StateManager.state.filters[path] || {};
+                const sortOptionsHTML = options.sortOptions ? options.sortOptions.map(opt => `<option value="${opt.value}" ${sortBy === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('') : '';
+                return `
+                    <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4 no-print">
+                        <h1 class="text-2xl font-bold print-text-primary">${title}</h1>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            ${options.showSearch ? `
+                                <div class="relative flex-grow sm:flex-grow-0">
+                                    <input type="text" placeholder="Search..." oninput="App.updateFilter('${path}', 'searchTerm', this.value)" value="${searchTerm}" class="w-full bg-tertiary border-tertiary rounded-md p-2 pl-8 focus:ring-2 focus:ring-accent focus:outline-none">
+                                    <svg class="w-4 h-4 text-text-secondary absolute top-1/2 left-2.5 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                </div>
+                            ` : ''}
+                            ${options.sortOptions ? `
+                                <select onchange="App.updateFilter('${path}', 'sortBy', this.value)" class="bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                    ${sortOptionsHTML}
+                                </select>
+                            ` : ''}
+                            ${options.customButtons || ''}
+                            <button onclick="window.print()" class="p-2.5 bg-tertiary hover:bg-gray-600 rounded-md transition-colors" title="Print View">
+                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6 3.125A2.25 2.25 0 0 1 8.25 1h7.5A2.25 2.25 0 0 1 18 3.125v10.704m-12 0c.24.03.48.062.72.096m-1.44-2.128a49.566 49.566 0 0 1 14.4 0m-14.4 0a49.566 49.566 0 0 0 14.4 0m-14.4 0L3 18.75A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75v-2.928M3.75 12h16.5M12 3.75h.008v.008H12V3.75Z" /></svg>
+                            </button>
+                            ${options.primaryAction || ''}
+                        </div>
+                    </div>
+                `;
+            },
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toast-message');
+                const toastIcon = document.getElementById('toast-icon');
+                
+                toast.className = 'toast fixed bottom-5 right-5 bg-secondary border p-4 rounded-lg shadow-2xl flex items-center space-x-3 z-50'; // Reset classes
+                toastIcon.className = 'w-6 h-6';
+
+                if (type === 'error') {
+                    toast.classList.add('border-danger/50');
+                    toastIcon.classList.add('text-danger');
+                    toastIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />`;
+                } else if (type === 'warning') {
+                     toast.classList.add('border-warning/50');
+                    toastIcon.classList.add('text-warning');
+                    toastIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />`;
+                }else {
+                    toast.classList.add('border-accent/50');
+                    toastIcon.classList.add('text-accent');
+                    toastIcon.innerHTML = `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>`;
+                }
+
+                toastMessage.innerHTML = message; 
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            },
+            showConfirmationModal(message, onConfirm) {
+                App.playSound('notification');
+                const modalHTML = `
+                    <div class="p-8 text-center bg-secondary rounded-lg shadow-xl border border-tertiary">
+                        <h2 class="text-xl font-bold mb-4 text-text-primary">Are you sure?</h2>
+                        <p class="text-text-secondary mb-6">${message}</p>
+                        <div class="flex justify-center space-x-4">
+                            <button id="confirm-no" class="px-6 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors font-semibold">Cancel</button>
+                            <button id="confirm-yes" class="px-6 py-2 bg-accent text-primary rounded-md transition-colors font-semibold">Confirm</button>
+                        </div>
+                    </div>`;
+                this.showModal(modalHTML);
+                document.getElementById('confirm-yes').onclick = () => { onConfirm(); this.hideModal(); };
+                document.getElementById('confirm-no').onclick = () => { this.hideModal(); };
+            },
+            showModal(innerHTML, maxWidth = 'max-w-lg') {
+                const modalContainer = document.getElementById('modal-container');
+                modalContainer.innerHTML = `<div class="bg-secondary rounded-lg shadow-xl w-full ${maxWidth} m-4 border border-tertiary max-h-[90vh] overflow-y-auto card-glossy">${innerHTML}</div>`;
+                modalContainer.classList.remove('hidden');
+                gsap.fromTo(modalContainer.firstElementChild, {opacity: 0, scale: 0.95}, {opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out'});
+            },
+            hideModal(onHidden) {
+                const modalContainer = document.getElementById('modal-container');
+                if (modalContainer.firstElementChild) {
+                    gsap.to(modalContainer.firstElementChild, {opacity: 0, scale: 0.95, duration: 0.2, ease: 'power2.in', onComplete: () => {
+                        modalContainer.classList.add('hidden');
+                        modalContainer.innerHTML = '';
+                        if (onHidden) onHidden();
+                    }});
+                } else {
+                     if (onHidden) onHidden();
+                }
+            },
+            renderThemeSettings() {
+                const container = document.getElementById('theme-settings-container');
+                if (!container) return;
+                const currentTheme = localStorage.getItem(DataManager.prefix + 'theme') || 'apex-teal-glow';
+                                const themes = [
+                    { id: 'apex-teal-glow', name: 'Apex Teal', color: '#0DDEC3' },
+                    { id: 'electric-magenta-glow', name: 'Electric Magenta', color: '#FF00FF' },
+                    { id: 'electric-vioblue', name: 'Electric VioBlue', color: '#8A2BE2' },
+                    { id: 'electric-blue-dark', name: 'Electric Blue Dark', color: '#195FFF' },
+                    { id: 'pastel-pink', name: 'Pastel Pink', color: '#FFB6C1' },
+                    { id: 'neon-blue', name: 'Neon Blue', color: '#00BFFF' },
+                    { id: 'tropical-orange', name: 'Tropical Orange', color: '#FF9F40' },
+                ];
+
+                container.innerHTML = themes.map(theme => `
+                    <button onclick="App.setTheme('${theme.id}')" class="theme-btn w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-secondary hover:text-text-primary transition-colors duration-200 ${currentTheme === theme.id ? 'active' : ''}">
+                       <span class="w-5 h-5 rounded-full" style="background-color: ${theme.color}"></span><span>${theme.name}</span>
+                   </button>
+                `).join('');
+            },
+            showLoading(message = 'Processing...') {
+                const modalHTML = `
+                    <div class="p-8 text-center bg-secondary rounded-lg shadow-xl border border-tertiary flex items-center justify-center space-x-3">
+                        <svg class="animate-spin h-6 w-6 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-text-primary font-semibold">${message}</span>
+                    </div>
+                `;
+                this.showModal(modalHTML, 'max-w-xs');
+            },
+        };
+
+        // --- ALL PAGE RENDER FUNCTIONS ---
+        Object.assign(App, {
+            renderHome(){
+                 const content = document.getElementById('content');
+                const today = dayjs().format('YYYY-MM-DD');
+                const todaysTasks = (StateManager.state.tasks || []).filter(t => t.date === today);
+                const completedTasks = todaysTasks.filter(t => t.completed);
+                const progress = todaysTasks.length > 0 ? (completedTasks.length / todaysTasks.length) * 100 : 0;
+                
+                const upcomingAppointments = this.state.reminders
+                    .filter(r => dayjs(r.date).isAfter(dayjs()))
+                    .sort((a,b) => new Date(a.date) - new Date(b.date))
+                    .slice(0, 3);
+
+                content.innerHTML = `
+                    <div class="space-y-8">
+                        <div class="flex justify-between items-start">
+                             <div>
+                                <h1 class="text-3xl font-bold print-text-primary welcome-title">Welcome Back</h1>
+                                <p class="text-text-secondary print-text-secondary">Here's your snapshot for ${dayjs().format('dddd, MMMM D')}.</p>
+                            </div>
+                            <button onclick="GeminiActions.generateDailyBriefing()" class="gemini-button flex items-center gap-2 px-4 py-2 bg-tertiary hover:bg-accent hover:text-primary rounded-md transition-colors font-semibold">
+                                <svg class="sparkle-icon micro-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69L13.13 6.36L14.09 9.36L17.09 10.32L20.76 11.45L17.09 12.58L14.09 13.54L13.13 16.54L12 20.21L10.87 16.54L9.91 13.54L6.91 12.58L3.24 11.45L6.91 10.32L9.91 9.36L10.87 6.36L12 2.69Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <span>Daily Briefing</span>
+                            </button>
+                        </div>
+                        
+                        <div id="briefing-container" class="hidden"></div>
+
+                        <!-- CLOCKS & TIMER -->
+                        <div class="grid lg:grid-cols-5 gap-6">
+                            <div class="lg:col-span-3 bg-secondary p-6 rounded-lg border border-tertiary card-glossy print-bg-secondary print-border">
+                                <h2 class="text-xl font-semibold mb-4 print-text-primary">World Clocks</h2>
+                                <div id="clocks-container" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center items-center min-h-[120px] justify-center relative"></div>
+                            </div>
+                            <div class="lg:col-span-2 bg-secondary p-6 rounded-lg border border-tertiary flex flex-col items-center justify-center card-glossy no-print">
+                                <h2 class="text-xl font-semibold mb-4">Focus Timer</h2>
+                                <div id="timer-display" class="text-5xl font-light">${this.formatTime(this.state.timer.timeLeft)}</div>
+                                <div class="flex space-x-4 mt-4">
+                                    <button onclick="App.toggleTimer(); App.playSound('notification');" id="timer-toggle-btn" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold w-24">${this.state.timer.isRunning ? 'Pause' : 'Start'}</button>
+                                    <button onclick="App.resetTimer(); App.playSound('notification');" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors font-semibold">Reset</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy print-bg-secondary print-border">
+                            <h2 class="text-xl font-semibold mb-4 print-text-primary">Today's Task Progress</h2>
+                            <div class="w-full bg-tertiary rounded-full h-4"><div id="progress-bar" class="bg-accent h-4 rounded-full transition-all duration-500" style="width: ${progress}%"></div></div>
+                            <p class="text-right text-text-secondary mt-2 print-text-secondary">${completedTasks.length} of ${todaysTasks.length} tasks completed</p>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy print-bg-secondary print-border">
+                                <h2 class="text-xl font-semibold mb-4 print-text-primary">Upcoming Appointments</h2>
+                                <div class="space-y-3">
+                                    ${upcomingAppointments.length > 0 ? upcomingAppointments.map(r => `
+                                        <div class="flex justify-between items-center">
+                                            <div>
+                                                <p class="font-medium print-text-primary">${r.title}</p>
+                                                <p class="text-sm text-text-secondary print-text-secondary">${dayjs(r.date).format('MMM D, h:mm A')}</p>
+                                            </div>
+                                            <span class="text-xs font-semibold px-2 py-1 rounded-full ${r.type === 'Client' ? 'bg-indigo-500/20 text-indigo-500' : 'bg-rose-500/20 text-rose-500'}">${r.type}</span>
+                                        </div>
+                                    `).join('') : '<p class="text-text-secondary print-text-secondary">No upcoming appointments.</p>'}
+                                </div>
+                            </div>
+                             <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy no-print">
+                                <h2 class="text-xl font-semibold mb-4">Quick Add</h2>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <button onclick="App.showTaskModal();" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">New Task</button>
+                                    <button onclick="App.showClientModal();" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">New Client</button>
+                                    <button onclick="App.showMedicalModal();" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">New Medical</button>
+                                    <button onclick="App.showLegalModal();" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">New Legal</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                this.startClocks();
+            },
+            renderDashboard() {
+                 const content = document.getElementById('content');
+                 const tasks = StateManager.state.tasks || [];
+                 const totalTasks = tasks.length;
+                 const doneTasks = tasks.filter(t => t.status === 'done').length;
+                 const overdueTasks = tasks.filter(t => t.date && dayjs(t.date).isBefore(dayjs(), 'day') && t.status !== 'done').length;
+                 
+                 content.innerHTML = UIManager.renderPageHeader('Dashboard', '#dashboard', {
+                    primaryAction: `<button onclick="App.showTaskModal();" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Task</button>`
+                 }) + `
+                    <div class="space-y-8">
+                        <!-- Stats Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy text-center">
+                                <h3 class="text-text-secondary text-sm uppercase font-semibold">Total Tasks</h3>
+                                <p class="text-4xl font-bold text-text-primary">${totalTasks}</p>
+                            </div>
+                            <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy text-center">
+                                <h3 class="text-text-secondary text-sm uppercase font-semibold">Completed Tasks</h3>
+                                <p class="text-4xl font-bold text-accent">${doneTasks}</p>
+                            </div>
+                             <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy text-center">
+                                <h3 class="text-text-secondary text-sm uppercase font-semibold">Overdue Tasks</h3>
+                                <p class="text-4xl font-bold text-text-primary">${overdueTasks}</p>
+                            </div>
+                        </div>
+
+                        <!-- Task Chart & Kanban -->
+                        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                            <div class="lg:col-span-2 bg-secondary p-6 rounded-lg border border-tertiary card-glossy">
+                                <h2 class="text-xl font-semibold">Task Status Breakdown</h2>
+                                <div class="relative h-64"><canvas id="task-chart"></canvas></div>
+                                <div id="task-chart-legend" class="flex justify-center gap-4 mt-4 text-sm"></div>
+                            </div>
+                            <div class="lg:col-span-3 bg-secondary p-6 rounded-lg border border-tertiary card-glossy">
+                                <h2 class="text-xl font-semibold mb-4">Task Board</h2>
+                                <div class="grid grid-cols-3 gap-4" id="kanban-board">
+                                    ${['todo', 'inprogress', 'done'].map(status => `
+                                        <div class="bg-primary p-3 rounded-lg">
+                                            <h3 class="font-semibold mb-3 text-center capitalize">${status === 'inprogress' ? 'In Progress' : status}</h3>
+                                            <div id="kanban-${status}" class="kanban-column space-y-3" data-status="${status}">
+                                                ${tasks.filter(t => t.status === status).map(t => `
+                                                    <div class="kanban-item ${status === 'todo' ? 'kanban-item-todo' : 'bg-tertiary'} p-3 rounded-md cursor-grab text-sm" data-id="${t.id}">
+                                                        ${t.title}
+                                                        ${t.date ? `<p class="text-xs text-text-secondary mt-1">${dayjs(t.date).format('MMM D')}</p>` : ''}
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                 `;
+                 this.renderTaskChart();
+                 this.initKanban();
+            },
+            renderCalendar() {
+                const content = document.getElementById('content');
+                const month = this.state.currentDate.format('MMMM YYYY');
+                content.innerHTML = `
+                    <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4 no-print">
+                        <div class="flex items-center space-x-2 sm:space-x-4">
+                            <button id="prev-month" class="p-2 rounded-full hover:bg-secondary transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+                            <h1 class="text-2xl font-bold w-48 text-center">${month}</h1>
+                            <button id="next-month" class="p-2 rounded-full hover:bg-secondary transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+                        </div>
+                        <div>
+                             <button onclick="window.print()" class="p-2.5 bg-tertiary hover:bg-gray-600 rounded-md transition-colors mr-2" title="Print Calendar">
+                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6 3.125A2.25 2.25 0 0 1 8.25 1h7.5A2.25 2.25 0 0 1 18 3.125v10.704m-12 0c.24.03.48.062.72.096m-1.44-2.128a49.566 49.566 0 0 1 14.4 0m-14.4 0a49.566 49.566 0 0 0 14.4 0m-14.4 0L3 18.75A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75v-2.928M3.75 12h16.5M12 3.75h.008v.008H12V3.75Z" /></svg>
+                            </button>
+                            <button onclick="App.showTaskModal(null, '${dayjs().format('YYYY-MM-DD')}');" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Task</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-px bg-tertiary border border-tertiary rounded-lg overflow-hidden print-border">
+                        ${this.getCalendarDaysHTML()}
+                    </div>
+                `;
+                document.getElementById('prev-month').onclick = () => {
+                    this.state.currentDate = this.state.currentDate.subtract(1, 'month');
+                    this.renderCalendar();
+                };
+                document.getElementById('next-month').onclick = () => {
+                    this.state.currentDate = this.state.currentDate.add(1, 'month');
+                    this.renderCalendar();
+                };
+            },
+            renderTasks(searchTerm = '', sortBy = 'default') {
+                const content = document.getElementById('content');
+                const primaryAction = `<button onclick="App.showTaskModal();" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Task</button>`;
+                const sortOptions = [
+                    { value: 'default', label: 'Sort by Order' },
+                    { value: 'date_asc', label: 'Date Ascending' },
+                    { value: 'date_desc', label: 'Date Descending' },
+                    { value: 'title_asc', label: 'Title A-Z' },
+                ];
+                
+                let tasks = [...(StateManager.state.tasks || [])];
+
+                if(searchTerm) tasks = tasks.filter(t => t.title.toLowerCase().includes(searchTerm.toLowerCase()));
+
+                if(sortBy === 'date_asc') tasks.sort((a, b) => (a.date && b.date) ? new Date(a.date) - new Date(b.date) : a.date ? -1 : 1);
+                if(sortBy === 'date_desc') tasks.sort((a, b) => (a.date && b.date) ? new Date(b.date) - new Date(a.date) : b.date ? -1 : 1);
+                if(sortBy === 'title_asc') tasks.sort((a, b) => a.title.localeCompare(b.title));
+                
+                content.innerHTML = UIManager.renderPageHeader('All Tasks', '#tasks', { primaryAction, showSearch: true, sortOptions }) + `
+                    <div id="task-list-container" class="bg-secondary border border-tertiary rounded-lg p-4 space-y-3 card-glossy print-bg-secondary print-border">
+                    ${tasks.length > 0 ? tasks.map(task => {
+                        const isOverdue = task.date && dayjs(task.date).isBefore(dayjs(), 'day') && task.status !== 'done';
+                        const subtasksHTML = (task.subtasks || []).map((sub, index) => `
+                            <div class="ml-8 flex items-center space-x-2">
+                                <input type="checkbox" id="subtask-${task.id}-${index}" ${sub.completed ? 'checked' : ''} onchange="App.toggleSubtask('${task.id}', ${index})" class="h-4 w-4 rounded bg-tertiary border-gray-500 text-accent focus:ring-accent">
+                                <label for="subtask-${task.id}-${index}" class="text-sm ${sub.completed ? 'line-through text-text-secondary' : 'text-text-secondary'}">${sub.text}</label>
+                            </div>
+                        `).join('');
+                        
+                        const handleStyle = sortBy === 'default' ? '' : 'display:none; visibility:hidden;';
+
+                        return `
+                        <div data-id="${task.id}" class="task-list-item flex items-start justify-between p-3 rounded-md bg-tertiary/50 hover:bg-tertiary transition-colors relative print-bg-secondary ${isOverdue ? 'border-l-4 border-accent' : 'border-l-4 border-transparent'}">
+                            <div class="drag-handle no-print" style="${handleStyle}"><span></span><span></span><span></span><span></span></div>
+                            <div class="flex items-start space-x-4 ml-4 flex-grow">
+                                <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="this.closest('.task-list-item').classList.toggle('opacity-50'); App.toggleTask('${task.id}')" class="h-5 w-5 rounded bg-tertiary border-gray-500 text-accent focus:ring-accent no-print mt-1">
+                                <div class="flex-grow">
+                                    <p class="${task.completed ? 'line-through text-text-secondary' : 'text-text-primary'} print-text-primary">${task.title}</p>
+                                    ${(task.date) ? `<p class="text-sm ${isOverdue ? 'text-accent font-semibold' : 'text-text-secondary'} print-text-secondary">${dayjs(task.date).format('MMM D, YYYY')}</p>` : ''}
+                                    ${task.details ? `<p class="text-sm text-text-secondary mt-1 pt-1 border-t border-primary/50 print-text-secondary whitespace-pre-wrap">${task.details}</p>` : ''}
+                                    ${subtasksHTML ? `<div class="mt-2 space-y-1">${subtasksHTML}</div>` : ''}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2 no-print flex-shrink-0">
+                                <button onclick="App.showTaskModal('${task.id}')" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg></button>
+                                <button onclick="UIManager.showConfirmationModal('Are you sure you want to delete this task?', () => App.deleteTask('${task.id}'))" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        </div>
+                    `}).join('') : '<p class="text-center text-text-secondary py-8">No tasks found. Add one to get started!</p>'}
+                    </div>
+                `;
+
+                const taskListEl = document.getElementById('task-list-container');
+                if (taskListEl && tasks.length > 0 && sortBy === 'default') {
+                    new Sortable(taskListEl, {
+                        animation: 200,
+                        handle: '.drag-handle',
+                        ghostClass: 'sortable-ghost',
+                        onEnd: (evt) => {
+                            const reorderedIds = Array.from(evt.target.children).map(item => item.dataset.id);
+                            StateManager.commit(state => {
+                                state.tasks.sort((a, b) => reorderedIds.indexOf(a.id) - reorderedIds.indexOf(b.id));
+                            });
+                        }
+                    });
+                }
+            },
+            renderClients(searchTerm = '', sortBy = 'default') {
+                const content = document.getElementById('content');
+                const primaryAction = `<button onclick="App.showClientModal();" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Client</button>`;
+                const sortOptions = [
+                    { value: 'default', label: 'Sort by Name' },
+                    { value: 'recent', label: 'Most Recent' }
+                ];
+
+                let clients = [...(StateManager.state.clients || [])];
+                if (searchTerm) clients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                if (sortBy === 'default') clients.sort((a, b) => a.name.localeCompare(b.name));
+                if (sortBy === 'recent') clients.sort((a,b) => b.id - a.id);
+                
+                content.innerHTML = UIManager.renderPageHeader('Clients', '#clients', { primaryAction, showSearch: true, sortOptions }) + `
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${clients.length > 0 ? clients.map(client => {
+                             const placeholder = `https://placehold.co/80x80/232323/EAEAEA?text=${encodeURIComponent(client.name.charAt(0))}`;
+                             const errorPlaceholder = `https://placehold.co/80x80/232323/AAAAAA?text=X`;
+                            return `
+                            <div class="bg-secondary border border-tertiary rounded-lg p-4 flex flex-col card-glossy print-bg-secondary print-border">
+                                <div class="flex items-start space-x-4">
+                                     <img src="${client.image || placeholder}" onerror="this.onerror=null;this.src='${errorPlaceholder}';" alt="Client photo" class="w-20 h-20 rounded-full object-cover border-2 border-tertiary">
+                                    <div>
+                                        <h3 class="font-bold text-lg print-text-primary">${client.name}</h3>
+                                        <p class="text-sm text-text-secondary print-text-secondary">${client.email || ''}</p>
+                                        <p class="text-sm text-text-secondary print-text-secondary">${client.phone || ''}</p>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-text-secondary mt-4 flex-grow print-text-secondary">${client.notes || 'No notes for this client.'}</p>
+                                <div class="flex items-center justify-end space-x-2 mt-4 pt-4 border-t border-tertiary no-print">
+                                    <button onclick="App.showClientModal('${client.id}')" class="p-2 rounded-full hover:bg-tertiary"><svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg></button>
+                                    <button onclick="UIManager.showConfirmationModal('This will delete the client and all associated appointments. Continue?', () => App.deleteClient('${client.id}'))" class="p-2 rounded-full hover:bg-tertiary"><svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                </div>
+                            </div>
+                        `}).join('') : '<p class="text-center text-text-secondary py-8 md:col-span-2 lg:col-span-3">No clients found. Add one to get started!</p>'}
+                    </div>`;
+            },
+            renderMedical(searchTerm = '', sortBy = 'default') {
+                 const content = document.getElementById('content');
+                 const primaryAction = `<button onclick="App.showMedicalModal();" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Appointment</button>`;
+                 const sortOptions = [{ value: 'default', label: 'Date Descending' }, { value: 'date_asc', label: 'Date Ascending' }];
+
+                 let medical = [...(StateManager.state.medical || [])];
+                 if(searchTerm) medical = medical.filter(m => m.doctor.toLowerCase().includes(searchTerm.toLowerCase()) || m.location.toLowerCase().includes(searchTerm.toLowerCase()));
+                 if(sortBy === 'default') medical.sort((a,b) => new Date(b.date) - new Date(a.date));
+                 if(sortBy === 'date_asc') medical.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+                 content.innerHTML = UIManager.renderPageHeader('Medical Appointments', '#medical', { primaryAction, showSearch: true, sortOptions }) + `
+                     <div class="bg-secondary border border-tertiary rounded-lg p-4 space-y-3 card-glossy print-bg-secondary print-border">
+                    ${medical.length > 0 ? medical.map(med => `
+                        <div class="flex items-center justify-between p-3 rounded-md bg-tertiary/50 hover:bg-tertiary transition-colors">
+                            <div>
+                                <p class="font-bold print-text-primary">${med.doctor}</p>
+                                <p class="text-sm text-text-secondary print-text-secondary">${med.location}</p>
+                                <p class="text-sm text-text-secondary print-text-secondary">${dayjs(med.date).format('ddd, MMM D, YYYY @ h:mm A')}</p>
+                            </div>
+                            <div class="flex items-center space-x-2 no-print">
+                                <button onclick="App.showMedicalModal('${med.id}')" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg></button>
+                                <button onclick="UIManager.showConfirmationModal('Delete this medical appointment?', () => App.deleteMedical('${med.id}'))" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        </div>
+                    `).join('') : '<p class="text-center text-text-secondary py-8">No medical appointments found.</p>'}
+                    </div>
+                 `;
+            },
+            renderLegal(searchTerm = '', sortBy = 'default') {
+                const content = document.getElementById('content');
+                const primaryAction = `<button onclick="App.showLegalModal();" class="w-full sm:w-auto px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add Case</button>`;
+                const sortOptions = [{ value: 'default', label: 'Sort A-Z' }, { value: 'recent', label: 'Most Recent' }];
+                
+                let legal = [...(StateManager.state.legal || [])];
+                if(searchTerm) legal = legal.filter(l => l.caseName.toLowerCase().includes(searchTerm.toLowerCase()));
+                if(sortBy === 'default') legal.sort((a,b) => a.caseName.localeCompare(b.caseName));
+                if(sortBy === 'recent') legal.sort((a,b) => b.id - a.id);
+
+                 content.innerHTML = UIManager.renderPageHeader('Legal Cases', '#legal', { primaryAction, showSearch: true, sortOptions }) + `
+                     <div class="bg-secondary border border-tertiary rounded-lg p-4 space-y-3 card-glossy print-bg-secondary print-border">
+                    ${legal.length > 0 ? legal.map(item => `
+                        <div class="flex items-center justify-between p-3 rounded-md bg-tertiary/50 hover:bg-tertiary transition-colors">
+                            <div>
+                                <p class="font-bold print-text-primary">${item.caseName}</p>
+                                <p class="text-sm text-text-secondary print-text-secondary">${item.caseInfo || 'No additional info.'}</p>
+                            </div>
+                            <div class="flex items-center space-x-2 no-print">
+                                <button onclick="App.showLegalModal('${item.id}')" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg></button>
+                                <button onclick="UIManager.showConfirmationModal('Delete this legal case?', () => App.deleteLegal('${item.id}'))" class="p-2 rounded-full hover:bg-secondary"><svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        </div>
+                    `).join('') : '<p class="text-center text-text-secondary py-8">No legal cases found.</p>'}
+                    </div>
+                 `;
+            },
+            showHelpModal() {
+               // Re-trigger tutorial logic
+               TutorialManager.start();
+            },
+            // TASK 5: AI Prompt Config UI
+            showAIPromptConfig() {
+                const prompts = StateManager.state.config.aiPrompts || {};
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-4">AI Prompt Configuration</h2>
+                        <form onsubmit="App.saveAIPrompts(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Daily Briefing Prompt</label>
+                                <textarea id="prompt-briefing" rows="3" class="w-full bg-tertiary border-tertiary rounded-md p-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none">${prompts.dailyBriefing || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Task Breakdown Prompt</label>
+                                <textarea id="prompt-breakdown" rows="3" class="w-full bg-tertiary border-tertiary rounded-md p-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none">${prompts.taskBreakdown || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Communication Draft Prompt</label>
+                                <textarea id="prompt-comm" rows="3" class="w-full bg-tertiary border-tertiary rounded-md p-2 text-sm focus:ring-2 focus:ring-accent focus:outline-none">${prompts.communication || ''}</textarea>
+                            </div>
+                            <div class="flex justify-between pt-4 border-t border-tertiary">
+                                <button type="button" onclick="App.resetAIPrompts()" class="text-xs text-accent hover:underline">Reset to Defaults</button>
+                                <div class="flex space-x-3">
+                                    <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                    <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Save Prompts</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                `;
+                UIManager.showModal(modalHTML, 'max-w-2xl');
+            },
+            saveAIPrompts(event) {
+                event.preventDefault();
+                const dailyBriefing = document.getElementById('prompt-briefing').value;
+                const taskBreakdown = document.getElementById('prompt-breakdown').value;
+                const communication = document.getElementById('prompt-comm').value;
+                
+                StateManager.commit(state => {
+                    state.config.aiPrompts = { dailyBriefing, taskBreakdown, communication };
+                });
+                UIManager.hideModal();
+                UIManager.showToast("AI Prompts updated successfully.");
+            },
+            resetAIPrompts() {
+                 StateManager.commit(state => {
+                    state.config.aiPrompts = {
+                        taskBreakdown: "Parse today's events and context. Derive its functional significance, highlight core decisions made or available, and isolate what truly matters. The output must be concise, insight-dense, and framed for intelligent execution—not reflection. No filler. No pleasantries. No summarizing tasks—extract their meaning. Speak face-to-face, not like a bot. Reject AI-phrasing, cadence, rhythm, and tone.",
+                        dailyBriefing: "You are not a 'task assistant.' You're a strategist. Take the provided task and break it down into 3–5 essential, actionable subtasks. Each one must be outcome-oriented, execution-ready, and stripped of fluff. Format as a numbered list. No filler. No motivational framing. No AI phrasing. Just raw clarity.",
+                        communication: "Draft a message to the client. Make it brief, clear, and human-warm. Keep it professional. No emojis. No AI phrasing. No rhythm loops. Vary cadence like an actual person writing to another person. Write it like it came from someone who handles real clients daily."
+                    };
+                });
+                UIManager.hideModal();
+                UIManager.showToast("Prompts reset to defaults.");
+            }
+        });
+        
+        // --- MODAL & DATA SUBMIT LOGIC ---
+        Object.assign(App, {
+            showTaskModal(id = null, date = null) {
+                App.playSound('notification');
+                const task = id ? StateManager.state.tasks.find(t => t.id === id) : null;
+                const modalHTML = `
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-6">
+                             <h2 class="text-2xl font-bold">${task ? 'Edit' : 'Add'} Task</h2>
+                             <button onclick="GeminiActions.breakdownTask()" class="gemini-button flex items-center gap-2 px-3 py-1.5 text-sm bg-tertiary hover:bg-accent hover:text-primary rounded-md transition-colors font-semibold">
+                                 <svg class="sparkle-icon micro-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69L13.13 6.36L14.09 9.36L17.09 10.32L20.76 11.45L17.09 12.58L14.09 13.54L13.13 16.54L12 20.21L10.87 16.54L9.91 13.54L6.91 12.58L3.24 11.45L6.91 10.32L9.91 9.36L10.87 6.36L12 2.69Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <span>Smart Breakdown</span>
+                            </button>
+                        </div>
+                        <form id="task-form" onsubmit="App.handleTaskSubmit(event, '${id || ''}')" class="space-y-4">
+                             <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Title</label>
+                                <input type="text" id="task-title" value="${task?.title || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Details (Optional)</label>
+                                <textarea id="task-details" rows="3" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">${task?.details || ''}</textarea>
+                            </div>
+                            <div class="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Date (Optional)</label>
+                                    <input type="date" id="task-date" value="${task?.date || (date || '')}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                </div>
+                                 <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Status</label>
+                                    <select id="task-status" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                        <option value="todo" ${!task || task?.status === 'todo' ? 'selected' : ''}>To Do</option>
+                                        <option value="inprogress" ${task?.status === 'inprogress' ? 'selected' : ''}>In Progress</option>
+                                        <option value="done" ${task?.status === 'done' ? 'selected' : ''}>Done</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Save</button>
+                            </div>
+                        </form>
+                    </div>`;
+                UIManager.showModal(modalHTML);
+            },
+            handleTaskSubmit(event, id) {
+                event.preventDefault();
+                const title = document.getElementById('task-title').value;
+                const details = document.getElementById('task-details').value;
+                const date = document.getElementById('task-date').value;
+                const status = document.getElementById('task-status').value;
+
+                const detailLines = details.split('\n');
+                const subtaskRegex = /^[-*]\s\[([xX ])\]\s(.*)$/;
+                
+                const subtasks = detailLines
+                    .map(line => {
+                        const match = line.match(subtaskRegex);
+                        if (match) {
+                            return { text: match[2].trim(), completed: match[1].toLowerCase() === 'x' };
+                        }
+                        return null;
+                    })
+                    .filter(item => item !== null);
+                
+                const mainDetails = detailLines.filter(line => !line.match(subtaskRegex)).join('\n').trim();
+
+                StateManager.commit(state => {
+                    if (id) {
+                        const task = state.tasks.find(t => t.id === id);
+                        if (task) { 
+                            task.title = title; 
+                            task.details = mainDetails;
+                            task.date = date || null;
+                            task.status = status;
+                            task.completed = status === 'done';
+                            task.subtasks = subtasks;
+                        }
+                    } else {
+                        state.tasks.push({ id: Date.now().toString(), title, details: mainDetails, date: date || null, completed: status === 'done', status, subtasks });
+                    }
+                });
+                UIManager.hideModal();
+                UIManager.showToast(`Task ${id ? 'updated' : 'saved'}!`);
+            },
+            toggleTask(id) {
+                 StateManager.commit(state => {
+                    const task = state.tasks.find(t => t.id === id);
+                    if (task) {
+                        task.completed = !task.completed;
+                        task.status = task.completed ? 'done' : 'todo';
+                    }
+                });
+            },
+            toggleSubtask(taskId, subtaskIndex) {
+                StateManager.commit(state => {
+                    const task = state.tasks.find(t => t.id === taskId);
+                    if (task && task.subtasks[subtaskIndex]) {
+                        task.subtasks[subtaskIndex].completed = !task.subtasks[subtaskIndex].completed;
+                    }
+                }, true); // isIrreversible = true
+                App.router(); 
+            },
+            deleteTask(id) {
+                StateManager.commit(state => {
+                    state.tasks = state.tasks.filter(t => t.id !== id);
+                });
+                UIManager.showToast('Task deleted.');
+            },
+             deleteClient(id) {
+                StateManager.commit(state => {
+                    state.clients = state.clients.filter(c => c.id !== id);
+                });
+                UIManager.showToast('Client deleted.');
+            },
+            deleteMedical(id) {
+                 StateManager.commit(state => {
+                    state.medical = state.medical.filter(m => m.id !== id);
+                });
+                UIManager.showToast('Medical appointment deleted.');
+            },
+            deleteLegal(id) {
+                 StateManager.commit(state => {
+                    state.legal = state.legal.filter(l => l.id !== id);
+                });
+                UIManager.showToast('Legal case deleted.');
+            },
+             showClientModal(id = null) {
+                App.playSound('notification');
+                const client = id ? StateManager.state.clients.find(c => c.id === id) : null;
+                const appointments = client ? (client.appointments || []) : [];
+                const modalHTML = `
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-6">
+                            <h2 class="text-2xl font-bold">${client ? 'Edit' : 'Add'} Client</h2>
+                            ${id ? `
+                                <button onclick="GeminiActions.showDraftOptions('${id}')" class="gemini-button flex items-center gap-2 px-3 py-1.5 text-sm bg-tertiary hover:bg-accent hover:text-primary rounded-md transition-colors font-semibold">
+                                     <svg class="sparkle-icon micro-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69L13.13 6.36L14.09 9.36L17.09 10.32L20.76 11.45L17.09 12.58L14.09 13.54L13.13 16.54L12 20.21L10.87 16.54L9.91 13.54L6.91 12.58L3.24 11.45L6.91 10.32L9.91 9.36L10.87 6.36L12 2.69Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    <span>Draft Comm...</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                        <form id="client-form" onsubmit="App.handleClientSubmit(event, '${id || ''}')" class="space-y-4">
+                            <div class="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Full Name</label>
+                                    <input type="text" id="client-name" value="${client?.name || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Image URL</label>
+                                    <input type="text" id="client-image" value="${client?.image || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Email</label>
+                                    <input type="email" id="client-email" value="${client?.email || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Phone</label>
+                                    <input type="tel" id="client-phone" value="${client?.phone || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Notes</label>
+                                <textarea id="client-notes" rows="3" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">${client?.notes || ''}</textarea>
+                            </div>
+
+                            ${id ? `
+                            <div class="pt-4 border-t border-tertiary">
+                                <h3 class="text-lg font-semibold text-text-primary mb-2">Appointments</h3>
+                                <div id="appointment-list" class="space-y-2 max-h-40 overflow-y-auto">
+                                ${appointments.length > 0 ? appointments.map(appt => `
+                                    <div class="text-sm text-text-secondary">${dayjs(appt.date).format('MMM D, YYYY h:mm A')}</div>
+                                `).join('') : '<p class="text-sm text-text-secondary">No appointments scheduled.</p>'}
+                                </div>
+                                <button type="button" onclick="App.showAppointmentModal('${id}')" class="mt-2 text-sm text-accent hover:underline">Add Appointment</button>
+                            </div>
+                            ` : ''}
+
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Save Client</button>
+                            </div>
+                        </form>
+                    </div>`;
+                UIManager.showModal(modalHTML);
+            },
+            handleClientSubmit(event, id) {
+                event.preventDefault();
+                const clientData = {
+                    name: document.getElementById('client-name').value,
+                    image: document.getElementById('client-image').value,
+                    email: document.getElementById('client-email').value,
+                    phone: document.getElementById('client-phone').value,
+                    notes: document.getElementById('client-notes').value,
+                };
+                StateManager.commit(state => {
+                    if (id) {
+                        const client = state.clients.find(c => c.id === id);
+                        if (client) {
+                            client.name = clientData.name;
+                            client.image = clientData.image;
+                            client.email = clientData.email;
+                            client.phone = clientData.phone;
+                            client.notes = clientData.notes;
+                        }
+                    } else {
+                        state.clients.push({ ...clientData, id: Date.now().toString(), appointments: [] });
+                    }
+                });
+                UIManager.hideModal();
+                UIManager.showToast(`Client ${id ? 'updated' : 'saved'}!`);
+            },
+            showAppointmentModal(clientId) {
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-6">Add Appointment</h2>
+                        <form onsubmit="App.handleAppointmentSubmit(event, '${clientId}')" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Date & Time</label>
+                                <input type="datetime-local" id="appt-date" class="w-full bg-tertiary rounded-md p-2" required>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal(() => App.showClientModal('${clientId}'))" class="px-4 py-2 bg-tertiary rounded-md">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary rounded-md">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+                UIManager.hideModal(() => UIManager.showModal(modalHTML));
+            },
+            handleAppointmentSubmit(event, clientId) {
+                event.preventDefault();
+                const date = document.getElementById('appt-date').value;
+                StateManager.commit(state => {
+                    const client = state.clients.find(c => c.id === clientId);
+                    if(client) {
+                        if (!client.appointments) client.appointments = [];
+                        client.appointments.push({ date });
+                        client.appointments.sort((a,b) => new Date(a.date) - new Date(b.date));
+                    }
+                });
+                UIManager.hideModal(() => {
+                    UIManager.showToast('Appointment added!');
+                    App.showClientModal(clientId);
+                });
+            },
+             showMedicalModal(id = null) {
+                App.playSound('notification');
+                const med = id ? StateManager.state.medical.find(m => m.id === id) : null;
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-6">${med ? 'Edit' : 'Add'} Medical Appointment</h2>
+                        <form onsubmit="App.handleMedicalSubmit(event, '${id || ''}')" class="space-y-4">
+                             <div class="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Doctor / Office</label>
+                                    <input type="text" id="med-doctor" value="${med?.doctor || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required>
+                                </div>
+                                 <div>
+                                    <label class="block text-sm font-medium text-text-secondary mb-1">Date & Time</label>
+                                    <input type="datetime-local" id="med-date" value="${med ? dayjs(med.date).format('YYYY-MM-DDTHH:mm') : ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required>
+                                </div>
+                            </div>
+                             <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Location / Address</label>
+                                <input type="text" id="med-location" value="${med?.location || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Save</button>
+                            </div>
+                        </form>
+                    </div>`;
+                UIManager.showModal(modalHTML);
+            },
+            handleMedicalSubmit(event, id) {
+                 event.preventDefault();
+                const medData = {
+                    doctor: document.getElementById('med-doctor').value,
+                    location: document.getElementById('med-location').value,
+                    date: document.getElementById('med-date').value,
+                };
+                 StateManager.commit(state => {
+                    if (id) {
+                        const med = state.medical.find(m => m.id === id);
+                        if (med) Object.assign(med, medData);
+                    } else {
+                        state.medical.push({ ...medData, id: Date.now().toString() });
+                    }
+                });
+                UIManager.hideModal();
+                UIManager.showToast(`Appointment ${id ? 'updated' : 'saved'}!`);
+            },
+            showLegalModal(id = null) {
+                App.playSound('notification');
+                const item = id ? StateManager.state.legal.find(l => l.id === id) : null;
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-6">${item ? 'Edit' : 'Add'} Legal Case</h2>
+                        <form onsubmit="App.handleLegalSubmit(event, '${id || ''}')" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Case Name / Title</label>
+                                <input type="text" id="legal-caseName" value="${item?.caseName || ''}" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-text-secondary mb-1">Case Info / Notes</label>
+                                <textarea id="legal-caseInfo" rows="4" class="w-full bg-tertiary border-tertiary rounded-md p-2 focus:ring-2 focus:ring-accent focus:outline-none">${item?.caseInfo || ''}</textarea>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-tertiary">
+                                <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Save</button>
+                            </div>
+                        </form>
+                    </div>`;
+                UIManager.showModal(modalHTML);
+            },
+            handleLegalSubmit(event, id) {
+                event.preventDefault();
+                const legalData = {
+                    caseName: document.getElementById('legal-caseName').value,
+                    caseInfo: document.getElementById('legal-caseInfo').value,
+                };
+                 StateManager.commit(state => {
+                    if (id) {
+                        const item = state.legal.find(l => l.id === id);
+                        if (item) Object.assign(item, legalData);
+                    } else {
+                        state.legal.push({ ...legalData, id: Date.now().toString() });
+                    }
+                });
+                UIManager.hideModal();
+                UIManager.showToast(`Legal Case ${id ? 'updated' : 'saved'}!`);
+            },
+        });
+
+        // --- GEMINI ACTIONS MODULE ---
+        const GeminiActions = {
+            async generateDailyBriefing() {
+                try {
+                    UIManager.showLoading('Generating Briefing...');
+                    const today = dayjs().format('YYYY-MM-DD');
+                    const todaysTasks = StateManager.state.tasks.filter(t => t.date === today);
+                    const todaysAppointments = App.state.reminders.filter(r => dayjs(r.date).isSame(dayjs(), 'day'));
+
+                    const prompt = `Data: ${JSON.stringify({tasks: todaysTasks, appointments: todaysAppointments})}. Today's date: ${dayjs().format('dddd, MMMM D, YYYY')}.`;
+                    // TASK 5: Pass type 'dailyBriefing' to use custom prompt
+                    const briefingText = await GeminiAPI.generateText(prompt, 'dailyBriefing');
+                    UIManager.hideModal();
+
+                    if (briefingText) {
+                        const briefingContainer = document.getElementById('briefing-container');
+                        const renderedHTML = marked.parse(briefingText);
+                        briefingContainer.innerHTML = `
+                            <div class="bg-secondary p-6 rounded-lg border border-tertiary card-glossy">
+                                <h2 class="text-xl font-semibold mb-4 text-accent flex items-center gap-2">
+                                    <svg class="micro-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69L13.13 6.36L14.09 9.36L17.09 10.32L20.76 11.45L17.09 12.58L14.09 13.54L13.13 16.54L12 20.21L10.87 16.54L9.91 13.54L6.91 12.58L3.24 11.45L6.91 10.32L9.91 9.36L10.87 6.36L12 2.69Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    Your Daily Briefing
+                                </h2>
+                                <div class="prose-custom text-text-secondary">${renderedHTML}</div>
+                            </div>
+                        `;
+                        briefingContainer.classList.remove('hidden');
+                    }
+                } catch (e) {
+                     UIManager.hideModal();
+                     console.error(e);
+                }
+            },
+            async breakdownTask() {
+                try {
+                    const titleInput = document.getElementById('task-title');
+                    const detailsTextarea = document.getElementById('task-details');
+                    if (!titleInput.value) {
+                        UIManager.showToast('Please enter a task title first.', 'warning');
+                        return;
+                    }
+
+                    UIManager.showToast('Breaking down task...', 'info');
+                    const prompt = `Parent Task: "${titleInput.value}"\n\nCurrent details:\n${detailsTextarea.value || 'None provided.'}`;
+                    // TASK 5: Pass type 'taskBreakdown'
+                    const subtasksText = await GeminiAPI.generateText(prompt, 'taskBreakdown');
+                    
+                    if (subtasksText) {
+                        const currentDetails = detailsTextarea.value;
+                        detailsTextarea.value = (currentDetails ? currentDetails + '\n\n' : '') + subtasksText;
+                        UIManager.showToast('Sub-tasks generated!');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    UIManager.showToast('Failed to generate breakdown.', 'error');
+                }
+            },
+            showDraftOptions(clientId) {
+                const modalHTML = `
+                    <div class="p-6">
+                        <h2 class="text-2xl font-bold mb-6">Draft Communication</h2>
+                        <p class="text-text-secondary mb-4">Select a template to generate a draft for this client.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="GeminiActions.draftCommunication('${clientId}', 'Appointment Reminder')" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">Appointment Reminder</button>
+                            <button onclick="GeminiActions.draftCommunication('${clientId}', 'Follow-up Email')" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">Follow-up Email</button>
+                             <button onclick="GeminiActions.draftCommunication('${clientId}', 'Check-in Message')" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">Check-in Message</button>
+                            <button onclick="GeminiActions.draftCommunication('${clientId}', 'Meeting Prep Summary')" class="text-center bg-tertiary hover:bg-accent hover:text-primary font-semibold py-3 px-4 rounded-lg transition-all duration-200">Meeting Prep Summary</button>
+                        </div>
+                    </div>
+                `;
+                UIManager.hideModal(() => UIManager.showModal(modalHTML));
+            },
+            async draftCommunication(clientId, type) {
+                try {
+                    const client = StateManager.state.clients.find(c => c.id === clientId);
+                    if (!client) return;
+
+                    UIManager.hideModal(() => UIManager.showLoading('Drafting...'));
+
+                    const upcomingAppointment = (client.appointments || [])
+                        .filter(a => dayjs(a.date).isAfter(dayjs()))
+                        .sort((a,b) => new Date(a.date) - new Date(b.date))[0];
+
+                    const prompt = `Draft Type: ${type}
+                    Client Name: ${client.name}
+                    Client Notes: ${client.notes || 'No notes available.'}
+                    ${upcomingAppointment ? `Upcoming Appointment: ${dayjs(upcomingAppointment.date).format('MMMM D, YYYY at h:mm A')}` : ''}
+                Based on this information, please generate a concise, professional, and warm message. If the type is 'Appointment Reminder' and there is no upcoming appointment, politely state that. If the type is 'Meeting Prep Summary', summarize the client notes into key bullet points for review. For all other types, craft an appropriate message. Sign off as "BNDR LifeMatrix Assistant".`;
+
+                const draftText = await GeminiAPI.generateText(prompt);
+                UIManager.hideModal();
+
+                if (draftText) {
+                    const renderedHTML = marked.parse(draftText);
+                    const draftModalHTML = `
+                        <div class="p-6">
+                            <h2 class="text-2xl font-bold mb-4 flex items-center gap-2">
+                                <svg class="micro-icon" viewBox="0 0 24 24" fill="none" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)"><path d="M12 2.69L13.13 6.36L14.09 9.36L17.09 10.32L20.76 11.45L17.09 12.58L14.09 13.54L13.13 16.54L12 20.21L10.87 16.54L9.91 13.54L6.91 12.58L3.24 11.45L6.91 10.32L9.91 9.36L10.87 6.36L12 2.69Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                AI-Generated Draft
+                            </h2>
+                            <div class="bg-tertiary p-4 rounded-md text-text-secondary max-h-80 overflow-y-auto prose-custom">${renderedHTML}</div>
+                            <div class="flex justify-end space-x-3 pt-4 mt-4 border-t border-tertiary">
+                                <button onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary rounded-md">Close</button>
+                                <button onclick="App.copyToClipboard(\`${draftText.replace(/`/g, '\\`')}\`)" class="px-4 py-2 bg-accent text-primary rounded-md">Copy to Clipboard</button>
+                            </div>
+                        </div>`;
+                    UIManager.showModal(draftModalHTML, 'max-w-2xl');
+                }
+            } catch(e) {
+                 UIManager.hideModal();
+                 console.error(e);
+                 UIManager.showToast("Failed to draft communication.", "error");
+            }
+        }
+    };
+
+    // --- FEATURE-SPECIFIC LOGIC (CHARTS, KANBAN, ETC.) ---
+    Object.assign(App, {
+        renderTaskChart() {
+            const ctx = document.getElementById('task-chart')?.getContext('2d');
+            const legendContainer = document.getElementById('task-chart-legend');
+            if(!ctx || !legendContainer) return;
+
+            const tasks = StateManager.state.tasks || [];
+            const statuses = {
+                todo: tasks.filter(t => t.status === 'todo').length,
+                inprogress: tasks.filter(t => t.status === 'inprogress').length,
+                done: tasks.filter(t => t.status === 'done').length,
+            };
+
+            const data = {
+                labels: ['To Do', 'In Progress', 'Done'],
+                datasets: [{
+                    data: [statuses.todo, statuses.inprogress, statuses.done],
+                    backgroundColor: [
+                        `rgb(var(--color-accent), 0.7)`,
+                        `rgb(var(--color-warning), 0.8)`,
+                        `rgb(var(--color-success), 0.9)`
+                    ],
+                    borderColor: 'rgb(var(--color-secondary))',
+                    borderWidth: 4,
+                }]
+            };
+            
+            // Custom HTML Legend
+            legendContainer.innerHTML = data.labels.map((label, i) => `
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-sm" style="background-color: ${data.datasets[0].backgroundColor[i]}"></span>
+                    <span>${label}</span>
+                </div>
+            `).join('');
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        },
+        initKanban() {
+            const columns = document.querySelectorAll('.kanban-column');
+            columns.forEach(col => {
+                new Sortable(col, {
+                    group: 'kanban',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: (evt) => {
+                        const taskId = evt.item.dataset.id;
+                        const newStatus = evt.to.dataset.status;
+                        StateManager.commit(state => {
+                            const task = state.tasks.find(t => t.id === taskId);
+                            if (task) {
+                                task.status = newStatus;
+                                task.completed = newStatus === 'done';
+                            }
+                        });
+                    }
+                });
+            });
+        },
+        getCalendarDaysHTML() {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const header = days.map(day => `<div class="text-center font-semibold py-2 bg-secondary text-text-secondary text-sm print-bg-secondary print-text-primary">${day}</div>`).join('');
+            
+            const startDate = this.state.currentDate.startOf('month');
+            const endDate = this.state.currentDate.endOf('month');
+            const startDay = startDate.day();
+            
+            let calendarHTML = header;
+            for (let i = 0; i < startDay; i++) { calendarHTML += `<div class="bg-secondary/50 print-bg-secondary"></div>`; }
+            
+            for (let i = 1; i <= endDate.date(); i++) {
+                const date = startDate.date(i);
+                const dateStr = date.format('YYYY-MM-DD');
+                const isToday = date.isSame(dayjs(), 'day');
+                const tasksForDay = (StateManager.state.tasks || []).filter(t => t.date === dateStr);
+                const eventsForDay = this.state.reminders.filter(r => dayjs(r.date).isSame(date, 'day'));
+                
+                calendarHTML += `
+                    <div class="calendar-day bg-secondary p-2 flex flex-col relative cursor-pointer hover:bg-tertiary transition-colors print-bg-secondary print-border" data-date="${dateStr}" onclick="UIManager.showDayDetailModal('${dateStr}')" ondragover="event.preventDefault()" ondragenter="App.handleDragEnter(event)" ondragleave="App.handleDragLeave(event)" ondrop="App.handleDrop(event)">
+                        <span class="font-bold ${isToday ? 'text-accent' : ''}">${i}</span>
+                        <div class="space-y-1 mt-1 overflow-y-auto flex-grow pointer-events-none">
+                            ${tasksForDay.map(t => {
+                                const isOverdue = dayjs(t.date).isBefore(dayjs(), 'day') && !t.completed;
+                                const overdueClass = isOverdue ? 'border-accent' : 'border-tertiary';
+                                return `
+                                <div draggable="true" ondragstart="event.stopPropagation(); App.handleDragStart(event, '${t.id}')" class="task-item text-xs p-1.5 rounded-md border-l-2 ${overdueClass} ${t.completed ? 'bg-accent/20 text-text-primary' : 'bg-tertiary text-text-primary'} pointer-events-auto">
+                                    ${t.title}
+                                </div>
+                            `}).join('')}
+                            ${eventsForDay.map(r => `
+                                <div class="event-item text-xs p-1.5 rounded-md ${r.type === 'Client' ? 'bg-indigo-500/30 text-indigo-300' : 'bg-rose-500/30 text-rose-300'}">
+                                    ${r.title}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }
+            return calendarHTML;
+        },
+        handleDragStart(event, taskId) { this.state.draggedTask = taskId; event.dataTransfer.effectAllowed = 'move'; },
+        handleDragEnter(event) { const target = event.target.closest('.calendar-day'); if (target) target.classList.add('drag-over'); },
+        handleDragLeave(event) { const target = event.target.closest('.calendar-day'); if (target) target.classList.remove('drag-over'); },
+        handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const target = event.target.closest('.calendar-day');
+            if (target && this.state.draggedTask) {
+                target.classList.remove('drag-over');
+                const newDate = target.dataset.date;
+                StateManager.commit(state => {
+                    const task = state.tasks.find(t => t.id === this.state.draggedTask);
+                    if (task) { 
+                        task.date = newDate;
+                    }
+                });
+                UIManager.showToast('Task moved successfully.');
+                this.state.draggedTask = null;
+            }
+        },
+        startClocks() {
+            // TASK 1: Use configured clocks
+            const clocks = StateManager.state.config.clocks.filter(c => c.enabled);
+            const container = document.getElementById('clocks-container');
+             if (!container) {
+                clearInterval(this.state.clockInterval);
+                return;
+            }
+            
+            container.innerHTML = clocks.map((tz, i) => `
+                <div class="flex flex-col items-center">
+                     <canvas id="clock-${i}" width="100" height="100" class="w-full max-w-[100px]"></canvas>
+                     <p class="font-semibold text-text-primary text-sm mt-2 print-text-primary">${tz.name}</p>
+                     <p id="digital-time-${i}" class="text-md font-light print-text-secondary"></p>
+                     <p id="digital-date-${i}" class="text-xs text-text-secondary print-text-secondary"></p>
+                </div>
+            `).join('');
+
+            const drawAllClocks = () => {
+                const accent = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
+                clocks.forEach((tz, i) => {
+                    const canvas = document.getElementById(`clock-${i}`);
+                    const digitalTimeEl = document.getElementById(`digital-time-${i}`);
+                    const digitalDateEl = document.getElementById(`digital-date-${i}`);
+
+                    if(canvas && digitalTimeEl && digitalDateEl) {
+                       const now = dayjs().tz(tz.tz);
+                       this.drawAnalogClock(canvas.getContext('2d'), now, `rgb(${accent})`);
+                       digitalTimeEl.textContent = now.format('h:mm A');
+                       digitalDateEl.textContent = now.format('MMM D');
+                    }
+                });
+            }
+            
+            drawAllClocks();
+            this.state.clockInterval = setInterval(drawAllClocks, 1000);
+        },
+        drawAnalogClock(ctx, time, accentColor) {
+            const radius = ctx.canvas.width / 2;
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.save();
+            ctx.translate(radius, radius);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.9, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgb(var(--color-tertiary))';
+            ctx.fill();
+            ctx.strokeStyle = accentColor;
+            ctx.lineWidth = radius * 0.05;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.05, 0, 2 * Math.PI);
+            ctx.fillStyle = accentColor;
+            ctx.fill();
+
+            const hour = time.hour();
+            const minute = time.minute();
+            
+            let hourAngle = (hour % 12 + minute / 60) * (Math.PI / 6) - Math.PI / 2;
+            this.drawHand(ctx, hourAngle, radius * 0.5, radius * 0.07, 'rgb(var(--color-text-primary))');
+            
+            let minuteAngle = (minute) * (Math.PI / 30) - Math.PI / 2;
+            this.drawHand(ctx, minuteAngle, radius * 0.75, radius * 0.05, 'rgb(var(--color-text-primary))');
+
+            ctx.restore();
+        },
+        drawHand(ctx, pos, length, width, color) {
+            ctx.beginPath();
+            ctx.lineWidth = width;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = color;
+            ctx.moveTo(0, 0);
+            ctx.rotate(pos);
+            ctx.lineTo(length, 0);
+            ctx.stroke();
+            ctx.rotate(-pos);
+        },
+        formatTime(seconds) {
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = (seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        },
+        toggleTimer() {
+            this.state.timer.isRunning = !this.state.timer.isRunning;
+            if (this.state.timer.isRunning) {
+                this.state.timer.interval = setInterval(() => {
+                    this.state.timer.timeLeft--;
+                    if (this.state.timer.timeLeft <= 0) {
+                        clearInterval(this.state.timer.interval);
+                        this.state.timer.isRunning = false;
+                        UIManager.showToast("Time's up!");
+                        this.playSound('notification');
+                    }
+                    this.updateTimerDisplay();
+                }, 1000);
+            } else {
+                clearInterval(this.state.timer.interval);
+            }
+            this.updateTimerDisplay();
+        },
+        resetTimer() {
+            clearInterval(this.state.timer.interval);
+            this.state.timer.isRunning = false;
+            this.state.timer.timeLeft = 25 * 60;
+            this.updateTimerDisplay();
+        },
+        updateTimerDisplay() {
+             const display = document.getElementById('timer-display');
+             const toggleBtn = document.getElementById('timer-toggle-btn');
+             if(display) display.textContent = this.formatTime(this.state.timer.timeLeft);
+             if(toggleBtn) toggleBtn.textContent = this.state.timer.isRunning ? 'Pause' : 'Start';
+        },
+        copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                UIManager.showToast('Copied to clipboard!');
+            } catch (err) {
+                UIManager.showToast('Failed to copy text.', 'error');
+            }
+            document.body.removeChild(textarea);
+        },
+
+    });
+    Object.assign(UIManager, {
+        showDayDetailModal(dateStr) {
+            App.playSound('notification');
+            const date = dayjs(dateStr);
+            const tasksForDay = (StateManager.state.tasks || []).filter(t => t.date === dateStr);
+            const eventsForDay = App.state.reminders.filter(r => dayjs(r.date).isSame(date, 'day'));
+
+            const modalHTML = `
+                <div class="p-6">
+                    <h2 class="text-2xl font-bold mb-1">${date.format('dddd, MMMM D')}</h2>
+                    <p class="text-text-secondary mb-6">Here's what's scheduled for this day.</p>
+                    
+                    <div class="space-y-4 max-h-80 overflow-y-auto">
+                        ${(tasksForDay.length === 0 && eventsForDay.length === 0) ? '<p class="text-text-secondary text-center py-4">Nothing scheduled for this day.</p>' : ''}
+                        
+                        ${tasksForDay.map(t => `
+                            <div class="flex items-center justify-between p-2 rounded-md bg-tertiary/50">
+                                <div class="flex items-center space-x-3">
+                                    <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="App.toggleTask('${t.id}');" class="h-5 w-5 rounded bg-tertiary border-gray-500 text-accent focus:ring-accent">
+                                    <span class="${t.completed ? 'line-through text-text-secondary' : ''}">${t.title}</span>
+                                </div>
+                                <span class="text-xs uppercase font-bold text-text-secondary">Task</span>
+                            </div>
+                        `).join('')}
+
+                        ${eventsForDay.map(r => `
+                            <div class="flex items-center justify-between p-2 rounded-md ${r.type === 'Client' ? 'bg-indigo-500/20' : 'bg-rose-500/20'}">
+                                <div>
+                                    <p class="font-medium ${r.type === 'Client' ? 'text-indigo-300' : 'text-rose-300'}">${r.title}</p>
+                                    <p class="text-sm text-text-secondary">${dayjs(r.date).format('h:mm A')}</p>
+                                </div>
+                                <span class="text-xs uppercase font-bold ${r.type === 'Client' ? 'text-indigo-400' : 'text-rose-400'}">${r.type}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-6 border-t border-tertiary mt-6">
+                        <button type="button" onclick="UIManager.hideModal()" class="px-4 py-2 bg-tertiary hover:bg-gray-600 rounded-md transition-colors">Close</button>
+                        <button type="button" onclick="UIManager.hideModal(() => App.showTaskModal(null, '${dateStr}'))" class="px-4 py-2 bg-accent text-primary hover:bg-accent-hover rounded-md transition-colors font-semibold">Add New Task</button>
+                    </div>
+                </div>
+            `;
+            this.showModal(modalHTML);
+        }
+    });
+
+
+    // Initialize the app on DOM content loaded
+    document.addEventListener('DOMContentLoaded', () => App.init());
+
+</script>
+</body>
+</html>
